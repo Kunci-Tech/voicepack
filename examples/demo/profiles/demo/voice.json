@@ -1,0 +1,35 @@
+{
+  "_replace": ["moves"],
+  "signature": {
+    "person": "first-plural",
+    "formality": 0.2,
+    "warmth": 0.8,
+    "playfulness": 0.6,
+    "humility": 0.8,
+    "salesPressure": 0.1
+  },
+  "mechanics": {
+    "avgSentenceWords": 9,
+    "maxSentenceWords": 20,
+    "maxLinesPerParagraph": 2,
+    "openingMove": "a concrete number or a named person, never a claim",
+    "closingMove": "an open question, never a call to action"
+  },
+  "moves": [
+    {
+      "id": "mv-001",
+      "text": "Name the person who made it.",
+      "example": "Ana pulled the first tray at 5:40."
+    },
+    {
+      "id": "mv-002",
+      "text": "Lead with the number, not the adjective.",
+      "example": "5,223 loaves this year."
+    },
+    {
+      "id": "mv-003",
+      "text": "Let a small failure be visible.",
+      "example": "40 loaves went in the bin on Tuesday."
+    }
+  ]
+}

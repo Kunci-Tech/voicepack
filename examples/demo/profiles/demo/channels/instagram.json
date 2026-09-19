@@ -1,0 +1,66 @@
+{
+  "_replace": ["structure.beats"],
+  "channel": "instagram",
+  "version": "1.0.0",
+  "constraints": {
+    "maxChars": 2200,
+    "hookWindowChars": 125,
+    "hashtags": { "min": 3, "max": 6, "style": "lowercase-mixed" },
+    "emojiPerPost": { "max": 2, "allowed": ["🍞", "🥖"] }
+  },
+  "structure": {
+    "beats": ["hook", "context", "substance", "invitation"],
+    "lineBreaks": "double",
+    "ctaStyle": "soft-question"
+  },
+  "exemplars": [
+    "exemplars/instagram/2026-08-14-five-thousand-loaves.md",
+    "exemplars/instagram/2026-06-02-sourdough-schedule.md",
+    "exemplars/instagram/2026-03-19-the-burn.md"
+  ],
+  "rules": [
+    {
+      "id": "vp-instagram-001",
+      "text": "Open with a concrete number or a named person, never a claim.",
+      "strength": "hard",
+      "why": "Numbers stop thumbs. Claims get scrolled past.",
+      "example": "5,223 loaves since April.",
+      "detect": {
+        "type": "regex",
+        "pattern": "^\\s*(we'?re|we are|our|introducing|announcing|excited)\\b",
+        "flags": "im",
+        "message": "A paragraph opens with a claim instead of a concrete detail."
+      },
+      "source": { "type": "user-teach", "date": "2026-08-01" },
+      "confidence": 0.9
+    },
+    {
+      "id": "vp-instagram-002",
+      "text": "No announcing announcements.",
+      "strength": "hard",
+      "why": "It is the loudest tell of a press release.",
+      "source": { "type": "user-teach", "date": "2026-08-01" },
+      "confidence": 0.9
+    },
+    {
+      "id": "vp-instagram-003",
+      "text": "Close on an open question, not a call to action.",
+      "strength": "soft",
+      "why": "An invitation gets replies. A CTA gets ignored.",
+      "source": { "type": "user-teach", "date": "2026-08-04" },
+      "confidence": 0.7
+    },
+    {
+      "id": "vp-instagram-004",
+      "text": "Keep sentences under 20 words.",
+      "strength": "soft",
+      "detect": {
+        "type": "maxSentenceWords",
+        "value": 20,
+        "message": "A sentence runs past 20 words."
+      },
+      "source": { "type": "user-teach", "date": "2026-08-04" },
+      "confidence": 0.7
+    }
+  ]
+}

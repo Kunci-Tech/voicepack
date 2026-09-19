@@ -1,0 +1,240 @@
+---
+name: voicepack
+description: This skill should be used whenever writing or generating prose on behalf of a brand or person — social media posts, captions, threads, blog articles, newsletters, launch announcements, replies — and whenever the user pastes a link and asks to learn, capture, or adopt its style. It compiles a token-budgeted voice pack from a JSON persona store and critiques drafts against it, so brand voice survives across sessions and across editors instead of decaying into generic AI prose.
+agent_created: true
+---
+
+# Voicepack
+
+Brand voice decays inside AI agents. Every session, the model's default voice wins
+and the output drifts toward generic marketing English. This skill prevents that by
+compiling the voice into a token-budgeted pack before every piece of writing, and
+critiquing the draft against it afterwards.
+
+## The one rule
+
+**Never read the persona store directly. Always go through the CLI.**
+
+The store is JSON and Markdown on disk. Reading it into context costs 8–15k tokens
+and makes adherence *worse*, because the model ignores most of what it is handed.
+The CLI reads the store out of context and returns a pack sized to fit.
+
+```
+WRONG   read persona/profiles/acme/voice.json, rules.json, channels/*.json, exemplars/*
+RIGHT   run: voicepack pack --profile acme --channel instagram --intent launch
+```
+
+Do not `cat`, `read`, `glob` or `grep` the data directory. One command, one pack.
+
+## Reading the output
+
+This CLI is built to be read by you, not by a person, so the output format is part
+of the contract rather than a presentation choice.
+
+- **Every line is `key: value`**, and the last line is `next:` — the one action to
+  take. Parse it; do not scrape prose out of it.
+- **`pack` writes only the pack to stdout.** Its token count, what was included and
+  what was dropped go to stderr. If you are piping the pack somewhere, the artefact
+  is clean.
+- **Exit codes are the fastest signal you get**, and they are documented in
+  `voicepack --help --json`:
+
+  | Code | Meaning | What to do |
+  |---|---|---|
+  | `0` | ok | continue |
+  | `1` | ran, but the answer is no | do **not** just retry — read `next:` |
+  | `2` | you called it wrong | fix the call and retry |
+  | `3` | environment not ready | run `doctor`, report the failure |
+
+  The `1` versus `2` split is the one that matters. `1` from `check` means the draft
+  is not shippable; retrying the same command changes nothing. `2` means a flag or a
+  name was wrong; retrying with it fixed is exactly right.
+- **Every error carries a `next:` line.** Use it instead of guessing.
+- **Nothing blocks on stdin.** Piping a draft in requires `--stdin`; a forgotten flag
+  is an error, never a hang.
+
+Add `--json` when you want the whole structure rather than the record stream.
+
+## Start every session here
+
+```
+voicepack context
+```
+
+One call, and you know the data directory, the profiles, the channels, the rule and
+exemplar counts, anything awaiting approval, and whether capture is ready. Run it
+before `pack` in a session that has not used the skill yet — guessing the profile or
+channel name costs more than asking.
+
+## Write-time procedure
+
+Run these in order. Do not skip steps and do not carry a pack over from an earlier
+turn — in a long conversation an instruction given twenty turns ago is diluted to
+nothing.
+
+```bash
+# 0. orient (first use in a session)
+voicepack context
+
+# 1. compile the pack for this exact job
+voicepack pack --profile <p> --channel <c> --intent <i>     # ~700 tokens
+
+# 2. write the draft using ONLY that pack
+
+# 3. layer 1 — deterministic lint (free, offline, instant)
+voicepack check --profile <p> --channel <c> --file draft.md
+
+# 4. layer 2 — your own judgement, see below
+
+# 5. fix only what was flagged. Do not rewrite what was not.
+```
+
+Intents: `promo`, `launch`, `educational`, `community`, `reactive`,
+`behind-the-scenes`, `recruitment`, `apology`. Intent selects which exemplars the
+compiler prefers, so a launch post and an apology post draw on different examples.
+
+## The two-layer critique
+
+**Layer 1 is the command.** `voicepack check` catches everything mechanical: banned
+lexicon, character and hashtag limits, emoji counts, sentence and paragraph length,
+punctuation, and any rule carrying a `detect` predicate. It returns a score and a
+verdict. It needs no model and no API key.
+
+**Layer 2 is you.** After layer 1, assess the draft against the pack yourself and
+report two things:
+
+- `voiceDrift` — where the draft sounds like a generic AI rather than this brand.
+  Cite the specific line. Typical signals: a generic CTA, a press-release opener,
+  a paragraph that could belong to any company, a register shift mid-draft.
+- `keep` — what is already right and must not be touched during revision. This
+  matters more than it looks: without it, revision flattens good lines while
+  fixing bad ones.
+
+Score meaning: `ship` (≥85), `revise` (60–84), `rewrite` (<60). A hard violation
+caps the score at 60 regardless of everything else.
+
+## When the user pastes a link
+
+This is the most common way the skill gets used, and it must work in one step.
+
+```
+1. voicepack doctor                                     # is the bridge up?
+2. voicepack ingest --url <url> -p <profile> -c <channel>
+```
+
+That captures the page, parses it offline, synthesizes a transferable pattern, and
+writes a candidate. Then show the user what it proposes:
+
+```
+PROPOSED (candidate — 1 instance, cannot become a hard rule yet)
+  pattern   first line short, no emoji in the hook, opens with a concrete number
+  evidence  1 post · captured 2026-09-19
+  transfer  structure + rhythm only — no text from the source is stored
+  merge     voicepack merge --id L-0007
+```
+
+Three things to get right here:
+
+- **Synthesize the pattern, never the text.** The point is the structural trick, not
+  the wording. Never offer to copy phrasing.
+- **It lands as a candidate, not a rule.** One post is one data point. It becomes a
+  soft signal immediately and promotes to a hard rule only after three independent
+  instances agree.
+- **Third-party content can never become an exemplar.** If `--own` was not passed,
+  the merge guard will refuse `--as exemplar`. That is correct — do not work around
+  it. Someone else's post can teach a rule about structure; it cannot be your voice.
+
+If the bridge is unavailable, `voicepack doctor` says so. Fall back to
+`voicepack ingest --source <file>` with text the user pasted directly. Never block
+the user on the bridge.
+
+## When the user teaches a rule
+
+```
+voicepack teach --profile <p> --channel <c> \
+  --rule "Threads posts land better when the first line is under 60 characters." \
+  --why "Scannable in one glance on mobile." --strength soft
+```
+
+Corrections to a draft the user just rejected are also teach events, and they are
+the highest-quality signal available because they are grounded in a specific
+failure. When the user says "no, not like that" — offer to `teach` the correction.
+
+Nothing is learned without approval. `ingest` and `teach` write; only `merge` and
+`teach` change what a draft will look like. Never auto-merge.
+
+## Commands
+
+```
+voicepack context                                  orient: dirs, profiles, pending, capture
+voicepack install-prompt [--repo <url>]            the bootstrap prompt, for a new machine
+voicepack doctor                                   preflight: node, data dir, bridge
+voicepack pack    -p P -c C [-i I] [--max-tokens N] [--verbose]
+voicepack check   -p P -c C -f draft.md [--json] [--quiet]
+voicepack teach   -p P -c C --rule "..." [--why "..."] [--strength hard|soft]
+voicepack capture -p P -c C --url <url>
+voicepack ingest  -p P -c C [--url <url> | --capture <raw.json> | --source <file>] [--own]
+voicepack diff    [--json]
+voicepack merge   -p P --id L-0001 [--as rule|hard|exemplar]
+voicepack lint    -p P          |  voicepack lint --privacy
+voicepack list
+voicepack history |  voicepack rollback --to <ref>
+voicepack init    --dir <path> --profile <name>
+```
+
+`--dir` selects the data directory. If omitted, the CLI checks `$VOICEPACK_DIR`,
+then `./voicepack.config.json`, then `~/.voicepack`.
+
+When working from a clone rather than an installed package, replace `voicepack`
+with `node bin/voicepack.mjs`.
+
+## Setting up a new machine
+
+Do not walk the user through a terminal. Print the bootstrap prompt and let an
+agent on that machine perform the install:
+
+```
+voicepack install-prompt --repo <engine-repo-url>
+```
+
+The prompt checks Node, fetches the engine, scaffolds the private data directory,
+wires it up, installs this skill file, and runs preflight — all without the user
+touching a shell. It is also the thing to paste when the user asks how to set
+Voicepack up somewhere else.
+
+## Troubleshooting
+
+- **"Profile not found"** — the data directory is wrong. Run `voicepack list` or
+  `voicepack context` to see what the CLI is actually resolving. This exits `2`,
+  not `1`: fix the name and retry.
+- **"Channel not defined"** — the error lists what does exist. Add
+  `profiles/<profile>/channels/<channel>.json`, or pass one of the available names.
+- **Pack is missing exemplars** — the budget was exceeded. Re-run with `--verbose`
+  to see what was dropped, or raise `--max-tokens`.
+- **Bridge tools absent** — trust is not retroactive. Approving the bridge
+  mid-conversation does not add its tools to that conversation. Start a new one.
+  Restarting the editor is not required. See the `browser-bridge-diagnostics` skill.
+- **`check` returns `ship` but the draft still sounds wrong** — layer 1 only proves
+  it is not *mechanically* wrong. Layer 2 is your job; do it.
+- **`check` exits `1` and you are tempted to re-run it** — don't. `1` means the
+  draft is not shippable. Read the `violation:` lines, fix the `HARD` ones, and
+  re-run only after editing.
+- **`install-prompt` warns the placeholder is unfilled** — pass
+  `--repo <engine-repo-url>`. The prompt still prints; it just cannot tell the
+  installing agent where to fetch the engine.
+
+## Maintaining this skill
+
+If you change the procedure here, keep the CLI surface in sync and re-run
+`voicepack lint --privacy` before committing. Brand data must never enter the
+engine repository.
+
+Two invariants are enforced by the test suite rather than by discipline, because
+both are the kind that fail silently:
+
+- `INSTALL.md` must contain `install/prompt.txt` **verbatim**, between the
+  `BEGIN/END INSTALL PROMPT` markers. Edit one without the other and the suite fails.
+- `package.json` must ship `install/`, must list no dependencies, and its scripts
+  must point at fixtures that exist. `install-prompt` reads that file at runtime,
+  so omitting it from `files` breaks the published package while working perfectly
+  from a clone.

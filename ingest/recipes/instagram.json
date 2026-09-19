@@ -1,0 +1,6 @@
+{
+  "name": "instagram",
+  "match": ["instagram.com"],
+  "notes": "Instagram puts the caption in og:description. Logged-out post pages render it in a single h1 inside the article; carousels add '... more' which must be expanded with a trusted click before the full caption is in the DOM. Engagement counts are not reliably exposed to the page, so they are left null and filled in manually.",
+  "eval": "(() => {\n  const meta = (sel) => { const el = document.querySelector(sel); return el ? (el.getAttribute('content') || '') : ''; };\n  const og = meta('meta[property=\"og:description\"]');\n  const h1 = document.querySelector('article h1');\n  const caption = h1 && h1.innerText ? h1.innerText.trim() : '';\n  const body = document.body ? document.body.innerText : '';\n  const author = (location.pathname.match(/^\\/([^/]+)\\//) || [])[1] || meta('meta[name=\"author\"]');\n  return JSON.stringify({\n    url: location.href,\n    title: document.title,\n    ogTitle: meta('meta[property=\"og:title\"]'),\n    ogDescription: og,\n    ogSite: 'instagram',\n    author,\n    published: meta('meta[property=\"article:published_time\"]'),\n    text: (caption || og || body).slice(0, 8000)\n  });\n})()"
+}

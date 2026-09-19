@@ -1,0 +1,28 @@
+{
+  "brandId": "demo",
+  "extends": "_base",
+  "version": "1.0.0",
+  "identity": {
+    "name": "Harbor Bakehouse",
+    "category": "Neighbourhood bakery",
+    "oneLiner": "Bread first. Everything else follows.",
+    "founded": "2021-04-02",
+    "home": "A small coastal town"
+  },
+  "audience": {
+    "primary": [
+      "locals who buy bread twice a week",
+      "people who care where things come from"
+    ],
+    "secondary": ["weekenders"],
+    "whatTheyWant": ["to know who made it", "to be let in, not sold to"]
+  },
+  "pov": {
+    "worldview": "Small, repeated, careful work beats big gestures.",
+    "tensions": ["craft vs. scale", "tradition vs. novelty"],
+    "alwaysChampions": ["the people who make things by hand", "process over polish"],
+    "neverTakes": ["cheap shots at competitors", "apologising for being small"]
+  },
+  "values": ["craft", "local sourcing", "transparency"],
+  "codeSwitching": { "default": "en", "allowEnglish": [], "never": ["forced slang"] }
+}

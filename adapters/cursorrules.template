@@ -1,0 +1,90 @@
+# Voicepack — Cursor / Antigravity rules
+#
+# Copy this file to your project root as `.cursorrules` (or the equivalent rule
+# file for your editor) and set VOICEPACK_DIR to your data directory.
+#
+# Replace `npx voicepack` with `node /path/to/voicepack/bin/voicepack.mjs` if you
+# run from a clone instead of the published package.
+
+## Brand voice
+
+Whenever you write prose on behalf of this brand — social posts, captions,
+threads, blog articles, newsletters, launch announcements, replies — you MUST
+compile the voice pack first. Never write brand prose from memory or from a
+previous turn in the conversation.
+
+## The one rule
+
+NEVER read the persona store directly. Do not `cat`, read, glob or grep the
+data directory. It costs 8-15k tokens and makes adherence worse. The CLI reads
+the store out of context and returns a pack sized to fit.
+
+    WRONG   read $VOICEPACK_DIR/profiles/*/voice.json, rules.json, exemplars/*
+    RIGHT   npx voicepack pack --profile <p> --channel <c> --intent <i>
+
+## Procedure
+
+1. Compile the pack:
+   `npx voicepack pack --profile <p> --channel <c> --intent <i>`
+   (~700 tokens). Do not skip this and do not reuse a pack from earlier.
+
+2. Write the draft using ONLY that pack.
+
+3. Lint it:
+   `npx voicepack check --profile <p> --channel <c> --file <draft>`
+   This is deterministic and offline. It catches banned lexicon, length and
+   count limits, sentence and paragraph shape, punctuation, and rule regexes.
+
+4. Judge it yourself. `check` only proves the draft is not *mechanically*
+   wrong. Report two things:
+   - `voiceDrift` — where it sounds like a generic AI rather than this brand.
+     Cite the specific line. Look for generic CTAs, press-release openers,
+     paragraphs that could belong to any company, mid-draft register shifts.
+   - `keep` — what is already right and must not be touched during revision.
+
+5. Fix only what was flagged. Do not rewrite what was not.
+
+## Score meanings
+
+- `ship` (>= 85) — mechanically clean
+- `revise` (60-84) — fixable
+- `rewrite` (< 60) — start again
+
+A hard violation caps the score at 60 regardless of everything else.
+
+## When the user pastes a link
+
+    npx voicepack doctor                                       # is the bridge up?
+    npx voicepack ingest --url <url> -p <p> -c <c>
+
+Then show the user what it proposes before merging. Three rules:
+
+- Synthesize the PATTERN, never the text. Never offer to copy phrasing.
+- It lands as a candidate, not a rule. One post is one data point.
+- Third-party content can never become an exemplar. The merge guard will
+  refuse `--as exemplar`. Do not work around it.
+
+If the bridge is unavailable, fall back to
+`npx voicepack ingest --source <file>` with text the user pasted. Never block
+the user on the bridge.
+
+## When the user corrects a draft
+
+A correction is a teach event, and the highest-quality signal available:
+
+    npx voicepack teach -p <p> -c <c> --rule "..." --why "..." --strength soft
+
+Offer to record it. Nothing is learned without the user's approval.
+
+## Commands
+
+    voicepack doctor
+    voicepack pack    -p P -c C [-i I] [--max-tokens N]
+    voicepack check   -p P -c C -f draft.md [--json] [--quiet]
+    voicepack teach   -p P -c C --rule "..." [--why "..."] [--strength hard|soft]
+    voicepack capture -p P -c C --url <url>
+    voicepack ingest  -p P -c C [--url <url> | --capture <raw.json> | --source <file>] [--own]
+    voicepack diff
+    voicepack merge   -p P --id L-0001 [--as rule|hard|exemplar]
+    voicepack lint    -p P   |   voicepack lint --privacy
+    voicepack list

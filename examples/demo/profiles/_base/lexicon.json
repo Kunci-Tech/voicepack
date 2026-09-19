@@ -1,0 +1,36 @@
+{
+  "signatureWords": [],
+  "banned": {
+    "aiSlop": [
+      "we're thrilled",
+      "we are thrilled",
+      "we're excited to announce",
+      "we are excited to announce",
+      "we're proud to announce",
+      "we are proud to announce",
+      "we're delighted",
+      "we are delighted",
+      "thrilled to announce",
+      "excited to announce",
+      "proud to announce",
+      "delve",
+      "elevate",
+      "unleash",
+      "game-changer",
+      "revolutionary",
+      "seamless",
+      "cutting-edge",
+      "must-try",
+      "nestled in the heart of",
+      "look no further",
+      "in today’s fast-paced world",
+      "in today's fast-paced world"
+    ],
+    "brandSpecific": []
+  },
+  "punctuation": {
+    "emDash": "avoid",
+    "ellipsis": "rare",
+    "exclamationMax": 1
+  }
+}

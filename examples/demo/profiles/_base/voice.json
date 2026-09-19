@@ -1,0 +1,19 @@
+{
+  "signature": {
+    "person": "first-plural",
+    "formality": 0.4,
+    "warmth": 0.7,
+    "playfulness": 0.5,
+    "humility": 0.6,
+    "salesPressure": 0.2
+  },
+  "mechanics": {
+    "avgSentenceWords": 11,
+    "maxSentenceWords": 24,
+    "maxLinesPerParagraph": 3,
+    "openingMove": "a concrete detail, never a claim",
+    "closingMove": "an invitation, never a hard CTA"
+  },
+  "moves": [],
+  "never": []
+}

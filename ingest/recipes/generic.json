@@ -1,0 +1,6 @@
+{
+  "name": "generic",
+  "match": ["*"],
+  "notes": "Fallback for any host. Prefers og:description (where social platforms put the caption) and falls back to the main content region, then body text.",
+  "eval": "(() => {\n  const meta = (sel) => { const el = document.querySelector(sel); return el ? (el.getAttribute('content') || '') : ''; };\n  const pick = (...sels) => {\n    for (const s of sels) {\n      const el = document.querySelector(s);\n      if (el && el.innerText && el.innerText.trim().length > 40) return el.innerText.trim();\n    }\n    return '';\n  };\n  const body = document.body ? document.body.innerText : '';\n  return JSON.stringify({\n    url: location.href,\n    title: document.title,\n    ogTitle: meta('meta[property=\"og:title\"]'),\n    ogDescription: meta('meta[property=\"og:description\"]'),\n    ogSite: meta('meta[property=\"og:site_name\"]'),\n    author: meta('meta[name=\"author\"]') || meta('meta[property=\"article:author\"]'),\n    published: meta('meta[property=\"article:published_time\"]'),\n    text: (pick('article', 'main', '[role=\"main\"]') || body).slice(0, 8000)\n  });\n})()"
+}

@@ -1,0 +1,18 @@
+{
+  "channel": "instagram",
+  "version": "0.1.0",
+  "constraints": {
+    "maxChars": 2200,
+    "hookWindowChars": 125,
+    "hashtags": { "min": 0, "max": 6, "style": "lowercase-mixed" },
+    "emojiPerPost": { "max": 2, "allowed": [] }
+  },
+  "structure": {
+    "beats": ["hook", "context", "substance", "invitation"],
+    "lineBreaks": "double",
+    "ctaStyle": "soft-question"
+  },
+  "toneOverrides": {},
+  "exemplars": [],
+  "rules": []
+}

@@ -1,0 +1,6 @@
+{
+  "name": "threads",
+  "match": ["threads.net", "threads.com"],
+  "notes": "Logged-out Threads puts the post text in og:description and the reply count in the visible header. The logged-in view renders the post in a div[data-pressable-container] subtree, so the text fallback walks those nodes and takes the longest run of prose.",
+  "eval": "(() => {\n  const meta = (sel) => { const el = document.querySelector(sel); return el ? (el.getAttribute('content') || '') : ''; };\n  const og = meta('meta[property=\"og:description\"]');\n  const nodes = [...document.querySelectorAll('div[data-pressable-container] span, article span')];\n  let best = '';\n  for (const n of nodes) {\n    const t = (n.innerText || '').trim();\n    if (t.length > best.length && !/^(\\d+[smhd]|\\d+ (likes?|replies|reposts?))$/.test(t)) best = t;\n  }\n  const body = document.body ? document.body.innerText : '';\n  return JSON.stringify({\n    url: location.href,\n    title: document.title,\n    ogTitle: meta('meta[property=\"og:title\"]'),\n    ogDescription: og,\n    ogSite: 'threads',\n    author: (location.pathname.match(/^\\/@([^/]+)/) || [])[1] || meta('meta[name=\"author\"]'),\n    published: meta('meta[property=\"article:published_time\"]'),\n    text: (best || og || body).slice(0, 8000)\n  });\n})()"
+}

@@ -1,0 +1,30 @@
+node_modules/
+.DS_Store
+*.log
+
+# ---------------------------------------------------------------------------
+# Brand data must NEVER live in this repository.
+#
+# The engine is public and forkable; your voice is private. Keeping them in
+# separate trees is what makes a pull request safe by construction — your
+# personas are not "excluded", they are simply not here.
+#
+# Run `voicepack lint --privacy` before pushing. It verifies this.
+#
+# NOTE: these patterns are root-anchored (`/profiles/`) on purpose. The
+# unanchored form also matches examples/demo/profiles/, which silently excludes
+# the committed fixture — and the fixture is what lets CI validate a pull
+# request without access to anyone's private profiles. The test suite asserts
+# the fixture stays tracked, because this failure is invisible until someone
+# clones the repo and finds CI has nothing to run against.
+# ---------------------------------------------------------------------------
+/profiles/
+/captures/
+/candidates/
+/persona/
+/learnings/
+*.raw.json
+*.candidate.json
+
+# Generated caches
+**/index.json

@@ -1,0 +1,41 @@
+{
+  "name": "voicepack",
+  "version": "0.1.0",
+  "description": "A portable persona engine that stops brand voice from decaying inside AI agents. Compiles a token-budgeted voice pack from a JSON persona store, and critiques drafts against it.",
+  "type": "module",
+  "bin": {
+    "voicepack": "bin/voicepack.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "ingest",
+    "adapters",
+    "install",
+    "examples",
+    "SKILL.md",
+    "INSTALL.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs",
+    "pack": "node bin/voicepack.mjs pack --dir examples/demo --profile demo --channel instagram --intent launch",
+    "check": "node bin/voicepack.mjs check --dir examples/demo --profile demo --channel instagram --file examples/demo/profiles/demo/exemplars/instagram/2026-08-14-five-thousand-loaves.md",
+    "context": "node bin/voicepack.mjs context --dir examples/demo",
+    "install-prompt": "node bin/voicepack.mjs install-prompt"
+  },
+  "keywords": [
+    "persona",
+    "brand-voice",
+    "style-guide",
+    "writing",
+    "ai-agent",
+    "skill",
+    "prompt-engineering",
+    "content"
+  ],
+  "license": "MIT"
+}

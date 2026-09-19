@@ -1,0 +1,8 @@
+{
+  "_replace": [],
+  "signatureWords": ["crumb", "starter", "pull", "bench", "slow proof"],
+  "banned": {
+    "brandSpecific": ["artisanal", "mouth-watering", "to die for", "hidden gem"]
+  },
+  "punctuation": { "emDash": "avoid", "ellipsis": "rare", "exclamationMax": 1 }
+}
