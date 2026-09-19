@@ -8,7 +8,7 @@ result in plain language. Do not hand me commands to paste — if something need
 running, run it.
 
 The engine repository is: <ENGINE_REPO_URL>
-(If that placeholder is still unfilled, ask me for the URL once, then continue.)
+(If that is still an unfilled placeholder, ask me for the URL once, then continue.)
 
 ## The one idea you must not break
 

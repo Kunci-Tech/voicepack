@@ -10,7 +10,7 @@
 | **First target** | WorkBuddy AI skill (adapters for other agents later) |
 | **Repository model** | Public engine repo + private profile data, out of tree |
 | **First brand profile** | Kunci Kuppi (data, not the product) |
-| **Status** | Phase 0 implemented; 86/86 smoke assertions passing |
+| **Status** | Phase 0 implemented; 89/89 smoke assertions passing |
 | **Version** | 0.5 |
 | **Date** | 19 September 2026 |
 
@@ -207,11 +207,11 @@ voicepack/                          # PUBLIC REPO
 │   ├── draft-bad.md                # a draft that trips 2 hard + 5 soft rules
 │   ├── draft-good.md               # a draft that scores 100
 │   └── captured-post.txt           # a manual-capture source for the ingest test
-└── test/smoke.mjs                  # 86 assertions, no framework
+└── test/smoke.mjs                  # 89 assertions, no framework
 ```
 
 **Build status (Phase 0 complete).** The CLI runs against Node ≥ 18 with zero
-dependencies and **86/86 smoke assertions passing**. Working: `context`,
+dependencies and **89/89 smoke assertions passing**. Working: `context`,
 `install-prompt`, `init`, `doctor`, `recipes`, `list`, `pack`, `check`, `teach`,
 `capture`, `ingest`, `diff`, `merge`, `lint` (including `--privacy`), `history`,
 `rollback`.
@@ -1039,7 +1039,7 @@ Goal: prove the loop on three real posts.
 - `SKILL.md` for WorkBuddy
 - Agent-first output contract and exit codes (§3.6)
 - `install/prompt.txt` + `INSTALL.md` + `voicepack install-prompt` — install with no terminal
-- `test/smoke.mjs` — 86 assertions, no framework, no dependencies
+- `test/smoke.mjs` — 89 assertions, no framework, no dependencies
 
 **Exit criteria:** given the brief that produced a real post, the pack generates a
 draft the founder rates ≥80% on-voice — and the pack is under 800 tokens. Run the

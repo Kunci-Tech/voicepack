@@ -27,6 +27,9 @@ import { readTextIfExists } from '../lib/util.mjs';
 
 const VERSION = '0.1.0';
 
+/** Where the install prompt fetches the engine from, unless --repo overrides it. */
+const DEFAULT_REPO = 'https://github.com/Kunci-Tech/voicepack';
+
 const COMMANDS = [
   { name: 'context', group: 'orient', summary: 'one-call orientation: data dir, profiles, channels, pending, capture status' },
   { name: 'install-prompt', group: 'orient', summary: 'print the copy-paste bootstrap prompt for a new agent or machine', options: ['--repo', '--json'] },
@@ -269,7 +272,10 @@ async function main() {
         });
       }
 
-      const repo = values.repo ?? '<ENGINE_REPO_URL>';
+      // The file keeps the placeholder so it stays fork-agnostic; the CLI fills
+      // it in, so the common case needs no editing at all. Pass --repo to point
+      // the prompt at a fork instead.
+      const repo = values.repo ?? DEFAULT_REPO;
       const prompt = raw.replaceAll('<ENGINE_REPO_URL>', repo);
 
       if (values.json) {
@@ -280,9 +286,8 @@ async function main() {
       // into a clipboard or another agent.
       process.stdout.write(prompt.endsWith('\n') ? prompt : prompt + '\n');
       writeErr(`install-prompt: ${prompt.split('\n').length} lines · engine ${engineRoot}`);
-      if (repo === '<ENGINE_REPO_URL>') {
-        writeErr('note: the repository placeholder is unfilled — pass --repo <url> to substitute it');
-      }
+      writeErr(`repo: ${repo}`);
+      if (!values.repo) writeErr(`note: pass --repo <url> to point the prompt at your own fork`);
       writeErr('next: paste this into the agent that should perform the install');
       return;
     }

@@ -22,13 +22,14 @@ everything the model needs, nothing it doesn't.
 ## Install
 
 **Your agent installs this. You do not.** Copy the prompt from
-[`INSTALL.md`](INSTALL.md), fill in the repository URL, paste it into the agent you
-already write with, and send. It checks Node, fetches the engine, scaffolds your
-private data directory, wires it up, installs its own instructions, and runs
-preflight — reporting back in plain language.
+[`INSTALL.md`](INSTALL.md), paste it into the agent you already write with, and send.
+It checks Node, fetches the engine, scaffolds your private data directory, wires it
+up, installs its own instructions, and runs preflight — reporting back in plain
+language.
 
-```
-npx voicepack install-prompt --repo <your-url>    # prints the same block
+```bash
+npx voicepack install-prompt              # prints the prompt, repo URL pre-filled
+npx voicepack install-prompt --repo <url> # ...or point it at your own fork
 ```
 
 If you would rather see the commands, `INSTALL.md` also has a manual path. Either
@@ -377,7 +378,7 @@ and native build failures. `npx voicepack` works wherever Node exists.
 ## Development
 
 ```bash
-npm test                        # smoke suite: 86 assertions, no framework
+npm test                        # smoke suite: 89 assertions, no framework
 npm run pack                    # compile the demo pack
 npm run check                   # lint a fixture draft
 npm run context                 # orient against the demo profile

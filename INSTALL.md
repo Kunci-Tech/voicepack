@@ -10,7 +10,7 @@ never open a terminal.
 
 1. Open the agent you write with — WorkBuddy AI, Cursor, Claude Code, whatever you use.
 2. Copy everything between the markers below.
-3. Replace `<ENGINE_REPO_URL>` with the engine repository URL (your fork, if you have one).
+3. Replace `<ENGINE_REPO_URL>` with `https://github.com/Kunci-Tech/voicepack` — or your own fork, if you have one.
 4. Paste it into the agent and send.
 5. Answer the one question it may ask, then read its summary.
 
@@ -18,9 +18,10 @@ That's it. The agent checks Node, fetches the engine, scaffolds your private dat
 directory, wires it up, installs the usage instructions into itself, and runs
 preflight. It reports back in plain language.
 
-> Prefer not to hand-edit the block? Ask the agent to run
-> `voicepack install-prompt --repo <your-url>` and work from that output instead —
-> it is the same text with the placeholder already substituted.
+> **Skip step 3.** Ask the agent to run `voicepack install-prompt` and it prints the
+> same text with the URL already filled in — add `--repo <your-fork-url>` to point it
+> somewhere else. The block below keeps the placeholder so this page stays
+> fork-agnostic.
 
 ---
 
@@ -37,7 +38,7 @@ result in plain language. Do not hand me commands to paste — if something need
 running, run it.
 
 The engine repository is: <ENGINE_REPO_URL>
-(If that placeholder is still unfilled, ask me for the URL once, then continue.)
+(If that is still an unfilled placeholder, ask me for the URL once, then continue.)
 
 ## The one idea you must not break
 
@@ -220,8 +221,9 @@ project needs installing.
 except `capture` works offline. You only need the bridge to fetch a post from a
 URL; `voicepack ingest --source <file>` accepts pasted text instead.
 
-**The agent asks for the repository URL.** The `<ENGINE_REPO_URL>` placeholder was
-left unfilled. Give it the URL once.
+**The agent asks for the repository URL.** You copied the block from this page and
+left `<ENGINE_REPO_URL>` unfilled. It is `https://github.com/Kunci-Tech/voicepack`,
+or ask the agent to run `voicepack install-prompt` instead, which fills it in for you.
 
 **The agent wants to install Python.** Stop it. Voicepack is Node-only on purpose
 — one runtime, zero dependencies, no version matrix to debug.

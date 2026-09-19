@@ -120,10 +120,25 @@ ok(
   embedded ? `md ${embedded[1].trim().length} chars vs file ${promptFile.length}` : 'markers missing'
 );
 
+// The file keeps the placeholder so it stays fork-agnostic; the CLI fills it in
+// with the canonical repository so the common case needs no hand-editing. Both
+// halves matter: a file with a hardcoded URL is wrong for forks, and a CLI that
+// emits the raw placeholder pushes a manual step onto the user.
+const CANONICAL_REPO = 'https://github.com/Kunci-Tech/voicepack';
+ok('the prompt file keeps the repo placeholder (stays fork-agnostic)', promptFile.includes('<ENGINE_REPO_URL>'));
+
 const promptOut = run(['install-prompt']);
 ok('install-prompt exits 0', promptOut.code === 0, promptOut.stderr.trim());
-ok('install-prompt writes the prompt to stdout only', promptOut.stdout.trim() === promptFile && !/^next: /m.test(promptOut.stdout));
+ok(
+  'install-prompt fills the placeholder with the canonical repo',
+  promptOut.stdout.includes(CANONICAL_REPO) && !promptOut.stdout.includes('<ENGINE_REPO_URL>')
+);
+ok(
+  'install-prompt writes the prompt to stdout only',
+  promptOut.stdout.trim() === promptFile.replaceAll('<ENGINE_REPO_URL>', CANONICAL_REPO) && !/^next: /m.test(promptOut.stdout)
+);
 ok('install-prompt puts its note on stderr', /^next: /m.test(promptOut.stderr));
+ok('install-prompt notes how to point at a fork', /--repo/.test(promptOut.stderr));
 
 const promptJson = json(['install-prompt', '--repo', 'https://example.test/vp.git', '--json']);
 ok('install-prompt --repo substitutes the placeholder', promptJson.prompt.includes('https://example.test/vp.git') && !promptJson.prompt.includes('<ENGINE_REPO_URL>'));

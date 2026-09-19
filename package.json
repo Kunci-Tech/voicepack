@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "A portable persona engine that stops brand voice from decaying inside AI agents. Compiles a token-budgeted voice pack from a JSON persona store, and critiques drafts against it.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kunci-Tech/voicepack.git"
+  },
+  "homepage": "https://github.com/Kunci-Tech/voicepack#readme",
+  "bugs": {
+    "url": "https://github.com/Kunci-Tech/voicepack/issues"
+  },
   "bin": {
     "voicepack": "bin/voicepack.mjs"
   },
@@ -15,7 +23,8 @@
     "examples",
     "SKILL.md",
     "INSTALL.md",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
