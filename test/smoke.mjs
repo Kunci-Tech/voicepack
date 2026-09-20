@@ -625,7 +625,13 @@ run([
       'lexicon.json': {
         // "elevate" and "unleash" appear in BOTH lists, which is the normal case:
         // _base ships a generic aiSlop list and the profile adds brandSpecific.
-        banned: { aiSlop: ['elevate', 'unleash', 'game-changer'], brandSpecific: ['elevate', 'unleash', 'aku', 'gigitan'] },
+        // The last pair overlaps by substring on purpose — "thrilled to announce"
+        // is contained in "we're thrilled to announce", and the base list really
+        // does hold both forms, because each catches phrasing the other misses.
+        banned: {
+          aiSlop: ['elevate', 'unleash', 'game-changer', "we're thrilled to announce"],
+          brandSpecific: ['elevate', 'unleash', 'aku', 'gigitan', 'thrilled to announce'],
+        },
       },
     },
   }),
@@ -653,6 +659,47 @@ const neverUse = pk.stdout.split('\n').find((l) => l.startsWith('NEVER USE:')) ?
 const countOf = (w) => (neverUse.match(new RegExp(`\\b${w}\\b`, 'g')) ?? []).length;
 ok('a word banned by both lists appears once', countOf('elevate') === 1, `elevate ×${countOf('elevate')}`);
 ok('deduplication keeps the brand-specific word', countOf('aku') === 1 && countOf('gigitan') === 1);
+
+// The same bug lived in two files — the pack printed the banned list twice and so
+// did the check message — and neither assertion above caught it, because both of
+// them read the pack. The check message is the copy a writer actually acts on:
+// it is what they see when told which words to delete.
+const dupDraft = 'Elevate the everyday. Unleash a new ritual. Aku suka gigitan ini. Truly a game-changer.';
+const dup = json(['check', '--dir', packData, '-p', 'pk', '-c', 'instagram', '--text', dupDraft, '--json']);
+const lexV = dup.violations.find((v) => v.ruleId === 'lexicon:banned') ?? {};
+const named = String(lexV.message ?? '').replace(/^Uses banned wording:\s*/, '').split(',').map((s) => s.trim()).filter(Boolean);
+
+ok('check reports the banned words it matched', named.length === 5, lexV.message);
+ok('check names each banned word once', new Set(named).size === named.length, named.join(' | '));
+
+// One list, one order, wherever it surfaces. A writer who reads NEVER USE in the
+// pack and then sees the same words reshuffled in the check message has to
+// re-scan both to confirm they agree.
+const packOrder = neverUse.replace(/^NEVER USE:\s*/, '').split(',').map((s) => s.trim());
+ok(
+  'check names the banned words in the pack\u2019s order',
+  JSON.stringify(named) === JSON.stringify(packOrder.filter((w) => named.includes(w))),
+  `pack:  ${packOrder.join(' | ')}\n       check: ${named.join(' | ')}`
+);
+
+// A draft that trips a nested pair should name the longer form only. The shorter
+// entry matched the same span, so naming it too sends the writer hunting for a
+// second occurrence that is not there.
+const subDraft = "We're thrilled to announce the new bake.";
+const sub = json(['check', '--dir', packData, '-p', 'pk', '-c', 'instagram', '--text', subDraft, '--json']);
+const subV = sub.violations.find((v) => v.ruleId === 'lexicon:banned') ?? {};
+const subNamed = String(subV.message ?? '').replace(/^Uses banned wording:\s*/, '').split(',').map((s) => s.trim()).filter(Boolean);
+ok('a nested ban names the longer form', subNamed.includes("we're thrilled to announce"), subV.message);
+ok('a nested ban does not also name the form it contains', !subNamed.includes('thrilled to announce'), subV.message);
+ok('a nested ban names one word, not two', subNamed.length === 1, subV.message);
+
+// The other half of the contract: a draft that avoids the lexicon must not be
+// flagged at all. A check that fires on everything is as useless as one that
+// never fires, and a false positive here trains the writer to ignore the line.
+const cleanDraft = 'Kami memanggang roti ini setiap pagi. Datang sebelum jam sembilan.';
+const clean = json(['check', '--dir', packData, '-p', 'pk', '-c', 'instagram', '--text', cleanDraft, '--json']);
+ok('a draft with no banned wording is not flagged for it', !clean.violations.some((v) => v.ruleId === 'lexicon:banned'));
+ok('a draft with no banned wording still returns a score', typeof clean.score === 'number');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 
