@@ -650,11 +650,34 @@ ok('pack keeps exit 0 — the artefact is still valid', emptyPack.code === 0, `e
 const realPack = run(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram']);
 ok('a populated profile does not warn', !/no rules and no exemplars/.test(realPack.stderr), realPack.stderr.trim());
 ok(
-  'a populated profile still gets the write instruction',
-  /^next: write the draft using only this pack/m.test(realPack.stderr),
+  'a populated profile is not sent to the intake prompt',
+  !/^next: fill the profile first/m.test(realPack.stderr),
   realPack.stderr.trim()
 );
 ok('a populated profile still packs exemplars', json(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram', '--json']).included.includes('exemplars'));
+
+// A pack that had to drop something must say so. The shipped demo does not fit
+// the default budget — one of its three exemplars is cut — so an agent reading
+// only the artefact would write without it and never know. Dropping is not an
+// error, but a partial pack must not read as a whole one.
+const demoJson = json(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram', '--json']);
+ok('a pack that dropped something reports it', demoJson.dropped.length > 0, JSON.stringify(demoJson.dropped));
+ok('a partial pack warns on stderr', /this pack is partial/.test(realPack.stderr), realPack.stderr.trim());
+ok('a partial pack says what the draft will be missing', /writing without/.test(realPack.stderr), realPack.stderr.trim());
+ok('a partial pack reports what it would take to fit', demoJson.requiredTokens > demoJson.budget, `${demoJson.requiredTokens} vs ${demoJson.budget}`);
+
+// The suggested budget has to be one that actually works, or it is just a
+// different wrong number. Two real profiles here needed 750 and 1050; guessing
+// from the tokens that fitted gave 1000 and 1100, wrong in both directions.
+const suggested = Number((realPack.stderr.match(/--max-tokens (\d+)/) ?? [])[1]);
+ok('a partial pack suggests a budget', Number.isFinite(suggested) && suggested > 0, realPack.stderr.trim());
+const fits = json(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram', '--max-tokens', String(suggested), '--json']);
+ok('the suggested budget actually fits', fits.dropped.length === 0, `at ${suggested}: ${fits.dropped.join(', ')}`);
+
+// And a pack that does fit must carry none of that noise.
+const fullPack = run(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram', '--max-tokens', String(suggested)]);
+ok('a complete pack carries no partial warning', !/partial/.test(fullPack.stderr), fullPack.stderr.trim());
+ok('a complete pack gets the write instruction', /^next: write the draft using only this pack/m.test(fullPack.stderr), fullPack.stderr.trim());
 
 // ---------------------------------------------------------------- pack layout
 // Three ways a pack can be well-formed and still wrong. All three were found by

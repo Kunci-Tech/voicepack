@@ -148,8 +148,28 @@ MOVES (do this)
 (+6 more moves not shown — raise --max-tokens)
 ```
 
-`--max-tokens 1200` is the hard cap; the default is 700. Raise it when a channel
-needs the full move list, and check `dropped:` on stderr to see what did not fit.
+`--max-tokens 1200` is the hard cap; the default is 700.
+
+700 is a starting point, not a fit. A profile with eleven rules and ten moves spends
+680 of it before soft rules or exemplars get a look in, so **the pack you get at the
+default is usually partial** — and the two blocks that fall off first are the ones
+carrying the judgement the hard rules cannot state. It says so on stderr, names what
+it left out, and gives the exact budget that would fit everything:
+
+```
+warning: this pack is partial — soft-rules, exemplar:L-0008 did not fit in the budget
+warning: writing from it means writing without soft-rules or exemplar:L-0008
+pack: 680/700 tokens · kunci-kuppi/threads
+included: header, lexicon, structure, moves
+dropped: soft-rules, exemplar:L-0008
+complete at: 1050 tokens
+next: re-run with --max-tokens 1050 so the whole pack fits, then write the draft using only this pack
+```
+
+Dropping is not an error — the artefact is still valid and the exit code stays 0 — but
+a partial pack must not read as a whole one. Writing without the exemplars is writing
+without the thing `lint` says rules alone cannot replace. `--json` carries the same
+number as `requiredTokens`.
 
 ---
 

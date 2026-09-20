@@ -424,13 +424,30 @@ async function main() {
         writeErr(`warning: profile "${pack.profile}" has no rules and no exemplars — this pack is defaults only`);
         writeErr('warning: it will produce generic prose. Do not treat a clean `check` on it as on-voice.');
       }
+
+      // A dropped block is not an error, but a partial pack must not read as a
+      // whole one. `soft-rules` and `exemplars` fall off a real profile first —
+      // they sit last in the priority order — and they are precisely the two
+      // carrying the judgement the hard rules cannot state. A profile with 11
+      // rules and 10 moves fills 680 of the default 700 before either gets a
+      // look in, so this fires on any profile that has actually been used.
+      const partial = pack.dropped.length > 0;
+      const fitsAt = Math.ceil(pack.requiredTokens / 50) * 50;
+      if (partial && !voiceless) {
+        writeErr(`warning: this pack is partial — ${pack.dropped.join(', ')} did not fit in the budget`);
+        writeErr(`warning: writing from it means writing without ${pack.dropped.join(' or ')}`);
+      }
+
       writeErr(`pack: ${pack.tokens}/${pack.budget} tokens · ${pack.profile}/${pack.channel}${pack.intent ? `/${pack.intent}` : ''}`);
       writeErr(`included: ${pack.included.join(', ')}`);
       if (pack.dropped.length) writeErr(`dropped: ${pack.dropped.join(', ')}`);
+      if (partial) writeErr(`complete at: ${fitsAt} tokens`);
       writeErr(
         voiceless
           ? `next: fill the profile first — \`voicepack profile-prompt --brand "<one or two lines about the brand>" -p ${pack.profile}\``
-          : `next: write the draft using only this pack, then \`voicepack check -p ${pack.profile} -c ${pack.channel} -f <draft>\``
+          : partial
+            ? `next: re-run with --max-tokens ${fitsAt} so the whole pack fits, then write the draft using only this pack`
+            : `next: write the draft using only this pack, then \`voicepack check -p ${pack.profile} -c ${pack.channel} -f <draft>\``
       );
       return;
     }

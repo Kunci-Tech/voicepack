@@ -36,6 +36,12 @@ of the contract rather than a presentation choice.
 - **`pack` writes only the pack to stdout.** Its token count, what was included and
   what was dropped go to stderr. If you are piping the pack somewhere, the artefact
   is clean.
+- **Read `dropped:` before you write.** The default 700-token budget does not fit a
+  used profile, so the pack you get is often partial — and it is `soft-rules` and
+  `exemplars` that fall off first, which are the two blocks the hard rules cannot
+  replace. When stderr says `this pack is partial`, it also gives `complete at: N`;
+  re-run with `--max-tokens N` before drafting. Writing from a partial pack and
+  reporting success is the failure this warns about.
 - **Exit codes are the fastest signal you get**, and they are documented in
   `voicepack --help --json`:
 
@@ -270,8 +276,12 @@ the brand does not have, and it is the hardest error to find later.
   not `1`: fix the name and retry.
 - **"Channel not defined"** — the error lists what does exist. Add
   `profiles/<profile>/channels/<channel>.json`, or pass one of the available names.
-- **Pack is missing exemplars** — the budget was exceeded. Re-run with `--verbose`
-  to see what was dropped, or raise `--max-tokens`.
+- **Pack is missing exemplars or soft rules** — the budget was exceeded. stderr says
+  `this pack is partial` and gives `complete at: N`; re-run with `--max-tokens N`.
+- **`merge --as exemplar` refuses** — either the candidate is third-party (only your
+  own content can be an exemplar) or it carries no text. For the second, re-ingest the
+  post with `--own`, or pass the text verbatim with `--text "..."`. Do not work around
+  either guard.
 - **Bridge tools absent** — trust is not retroactive. Approving the bridge
   mid-conversation does not add its tools to that conversation. Start a new one.
   Restarting the editor is not required. See the `browser-bridge-diagnostics` skill.
