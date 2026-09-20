@@ -285,6 +285,14 @@ the brand does not have, and it is the hardest error to find later.
   `voicepack lint -p P` and look for "will never run". A `detect` block with an
   unsupported `type`, or `forbiddenWords` with no words, is ignored at check time,
   so the draft scores 100 while violating the rule. Fix the rule, not the draft.
+- **`pack` warns "no rules and no exemplars"** — the profile is still a scaffold.
+  The pack is real, well-formed and useless: it holds the base defaults and the
+  banned-word list and nothing about this brand. Do **not** write from it, and do
+  not treat a clean `check` on the result as evidence of anything. Run
+  `voicepack context` — it will say `empty:` and point at `profile-prompt`.
+- **`context` says a profile is `empty`** — same thing, caught earlier. Fill the
+  profile before writing (§ "Capturing a brand from scratch"). This is the state a
+  fresh install is in, and the state it is most tempting to skip past.
 
 ## Maintaining this skill
 

@@ -100,6 +100,27 @@ merge the two trees. Do not put DATA inside ENGINE.
    exist, whether capture is ready, and the single next thing to do. Do not dump
    raw command output at me.
 
+10. Tell me the profile is still empty, and stop there.
+
+   The scaffold you just created has no rules and no examples. `pack` will still
+   return something — the base defaults and a banned-word list — and it looks
+   perfectly normal. Do not start writing with it. Anything you produce from an
+   empty profile sounds like a generic assistant, which is the exact problem
+   Voicepack exists to solve, and I will have no way to tell it went wrong.
+
+   Instead, print the intake prompt for me to paste into a capable model:
+
+     node ENGINE/bin/voicepack.mjs profile-prompt --brand "<one or two lines about the brand, taken from what I have told you>" -p <profile>
+
+   That model interviews me in two passes — questions and a plain-language
+   description of the voice first, JSON only after I confirm the description —
+   and hands back a bundle. When I bring that bundle back, write it with:
+
+     node ENGINE/bin/voicepack.mjs apply --file <bundle.json> --force
+
+   Then re-run `context`. It stops saying the profile is empty, and only then is
+   there anything worth writing with.
+
 ## From now on, the rule that makes this work
 
 Never read the persona store into your context. Do not open brand.json,

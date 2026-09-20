@@ -554,6 +554,46 @@ ok(
   /unknown detect type "maxWords"/.test(fwCheck('b-fw-unknown', { type: 'maxWords', value: 20 }).applied.stdout)
 );
 
+// ---------------------------------------------------------------- empty profile
+// A freshly scaffolded profile still packs. The result is the base defaults plus
+// the banned-word list — well-formed, and useless. Nothing about it looks wrong,
+// so an agent sent straight to `pack` writes generic prose and reports success.
+// That is the failure the whole tool exists to prevent, so both commands have to
+// say it out loud rather than hand over a clean-looking artefact.
+const emptyData = path.join(tmp, 'empty-data');
+run(['init', '--dir', emptyData, '--profile', 'blank']);
+
+const emptyCtx = run(['context', '--dir', emptyData]);
+ok('context flags an empty profile', /^empty: blank$/m.test(emptyCtx.stdout), emptyCtx.stdout.trim());
+ok(
+  'context sends an empty profile to the intake prompt',
+  /^next: voicepack profile-prompt/m.test(emptyCtx.stdout),
+  emptyCtx.stdout.trim()
+);
+ok(
+  'context does not send an empty profile to pack',
+  !/^next: voicepack pack/m.test(emptyCtx.stdout),
+  emptyCtx.stdout.trim()
+);
+ok('context --json reports emptyProfiles', json(['context', '--dir', emptyData, '--json']).emptyProfiles.includes('blank'));
+
+const emptyPack = run(['pack', '--dir', emptyData, '-p', 'blank', '-c', 'instagram']);
+ok('pack still emits an artefact for an empty profile', emptyPack.stdout.includes('INSTAGRAM'), emptyPack.stdout.slice(0, 80));
+ok('pack warns that an empty profile is defaults only', /no rules and no exemplars/.test(emptyPack.stderr), emptyPack.stderr.trim());
+ok('pack warns not to trust a clean check on it', /generic prose/.test(emptyPack.stderr), emptyPack.stderr.trim());
+ok('pack redirects an empty profile to the intake prompt', /^next: fill the profile first/m.test(emptyPack.stderr), emptyPack.stderr.trim());
+ok('pack keeps exit 0 — the artefact is still valid', emptyPack.code === 0, `exit ${emptyPack.code}`);
+
+// A real profile must be untouched by all of the above.
+const realPack = run(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram']);
+ok('a populated profile does not warn', !/no rules and no exemplars/.test(realPack.stderr), realPack.stderr.trim());
+ok(
+  'a populated profile still gets the write instruction',
+  /^next: write the draft using only this pack/m.test(realPack.stderr),
+  realPack.stderr.trim()
+);
+ok('a populated profile still packs exemplars', json(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram', '--json']).included.includes('exemplars'));
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log(`\n  ${pass} passed \u00b7 ${fail} failed\n`);

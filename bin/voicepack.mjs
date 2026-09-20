@@ -234,10 +234,30 @@ async function main() {
       const cands = pending(dataDir);
       const doc = await doctor(dataDir);
 
+      // Counted before either branch, so `--json` and the record stream cannot
+      // disagree about which profiles are usable.
+      const totals = profiles.map((name) => {
+        const p = loadProfile(dataDir, name);
+        const rules = (p.sharedRules ?? []).length + Object.values(p.channels).reduce((n, c) => n + (c.rules ?? []).length, 0);
+        const exs = Object.values(p.channels).reduce((n, c) => n + (c.exemplars ?? []).length, 0);
+        return { name, channels: Object.keys(p.channels), rules, exemplars: exs, empty: rules === 0 && exs === 0 };
+      });
+      const usable = totals.filter((t) => !t.empty);
+
       if (values.json) {
         return write(
           JSON.stringify(
-            { dataDir, dataDirSource: dirSource, node: process.versions.node, profiles, pending: cands.map((c) => c.id), captureReady: doc.captureReady, doctor: doc },
+            {
+              dataDir,
+              dataDirSource: dirSource,
+              node: process.versions.node,
+              profiles,
+              profileDetail: totals,
+              emptyProfiles: totals.filter((t) => t.empty).map((t) => t.name),
+              pending: cands.map((c) => c.id),
+              captureReady: doc.captureReady,
+              doctor: doc,
+            },
             null,
             2
           )
@@ -252,18 +272,28 @@ async function main() {
         return emit(r);
       }
 
-      for (const name of profiles) {
-        const p = loadProfile(dataDir, name);
-        r.kv(`channels.${name}`, Object.keys(p.channels));
-        const rules = (p.sharedRules ?? []).length + Object.values(p.channels).reduce((n, c) => n + (c.rules ?? []).length, 0);
-        const exs = Object.values(p.channels).reduce((n, c) => n + (c.exemplars ?? []).length, 0);
-        r.kv(`rules.${name}`, rules);
-        r.kv(`exemplars.${name}`, exs);
+      for (const t of totals) {
+        r.kv(`channels.${t.name}`, t.channels);
+        r.kv(`rules.${t.name}`, t.rules);
+        r.kv(`exemplars.${t.name}`, t.exemplars);
       }
       r.rows('pending', cands.map((c) => `${c.id} ${c.channel} ${c.provenance}`));
       r.kv('capture', doc.captureReady ? 'ready' : 'unavailable');
+
+      // A profile with no rules and no exemplars still packs: it returns the
+      // base defaults and the banned-word list, which is a skeleton, not a
+      // voice. That pack looks exactly like a working one, so an agent sent
+      // straight to `pack` writes generic prose and reports success — the one
+      // outcome the whole tool exists to prevent. Say it out loud instead.
+      if (!usable.length) {
+        r.rows('empty', totals.map((t) => t.name));
+        r.raw('note: an empty profile packs into defaults only — no rules, no examples. Fill it before writing.');
+        r.next(`voicepack profile-prompt --brand "<one or two lines about the brand>" -p ${totals[0].name}`);
+        return emit(r);
+      }
+
       r.raw('loop: pack -> draft -> check -> revise');
-      r.next(`voicepack pack -p ${profiles[0]} -c <channel> -i <intent>`);
+      r.next(`voicepack pack -p ${usable[0].name} -c <channel> -i <intent>`);
       return emit(r);
     }
 
@@ -375,10 +405,30 @@ async function main() {
 
       // stdout is the artefact and nothing else.
       process.stdout.write(pack.text);
+
+      // A profile with no rules and no exemplars still compiles: the result is
+      // the base defaults plus the banned-word list. It is a well-formed pack,
+      // which is exactly the problem — nothing about it looks wrong, so an
+      // agent writes generic prose from it and reports success. The artefact is
+      // still valid and still on stdout, so the exit code stays 0; it is the
+      // instruction that has to change.
+      const ruleCount =
+        (profile.sharedRules ?? []).length + Object.values(profile.channels).reduce((n, c) => n + (c.rules ?? []).length, 0);
+      const exCount = Object.values(profile.channels).reduce((n, c) => n + (c.exemplars ?? []).length, 0);
+      const voiceless = ruleCount === 0 && exCount === 0;
+
+      if (voiceless) {
+        writeErr(`warning: profile "${pack.profile}" has no rules and no exemplars — this pack is defaults only`);
+        writeErr('warning: it will produce generic prose. Do not treat a clean `check` on it as on-voice.');
+      }
       writeErr(`pack: ${pack.tokens}/${pack.budget} tokens · ${pack.profile}/${pack.channel}${pack.intent ? `/${pack.intent}` : ''}`);
       writeErr(`included: ${pack.included.join(', ')}`);
       if (pack.dropped.length) writeErr(`dropped: ${pack.dropped.join(', ')}`);
-      writeErr(`next: write the draft using only this pack, then \`voicepack check -p ${pack.profile} -c ${pack.channel} -f <draft>\``);
+      writeErr(
+        voiceless
+          ? `next: fill the profile first — \`voicepack profile-prompt --brand "<one or two lines about the brand>" -p ${pack.profile}\``
+          : `next: write the draft using only this pack, then \`voicepack check -p ${pack.profile} -c ${pack.channel} -f <draft>\``
+      );
       return;
     }
 

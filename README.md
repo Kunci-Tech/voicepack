@@ -89,6 +89,35 @@ placeholders that the CLI fills in, so no customer's name ever lands in this pub
 repo. The test suite asserts both placeholders survive, because the alternative is
 brand data in the engine tree — the one thing the two-tree rule exists to prevent.
 
+### An empty profile still packs. That is the trap.
+
+A freshly scaffolded profile has no rules and no examples, and `pack` will happily
+return something anyway: the base defaults and the banned-word list. It is
+well-formed, it fits the budget, and `check` will pass a draft written from it —
+because there is nothing in it to violate. Nothing anywhere looks wrong, and the
+draft sounds like a generic assistant.
+
+So both commands say it out loud instead:
+
+```
+$ voicepack context
+rules.kuncikuppi: 0
+exemplars.kuncikuppi: 0
+empty: kuncikuppi
+note: an empty profile packs into defaults only — no rules, no examples. Fill it before writing.
+next: voicepack profile-prompt --brand "<one or two lines about the brand>" -p kuncikuppi
+
+$ voicepack pack -p kuncikuppi -c instagram -i launch
+warning: profile "kuncikuppi" has no rules and no exemplars — this pack is defaults only
+warning: it will produce generic prose. Do not treat a clean `check` on it as on-voice.
+...
+next: fill the profile first — `voicepack profile-prompt --brand "..." -p kuncikuppi`
+```
+
+`pack` keeps exit `0` — the artefact is still valid and still on stdout, so the
+write loop does not break. It is the *instruction* that changes, because that is
+what the agent was about to act on.
+
 ---
 
 ## The idea: the CLI is a context firewall
@@ -457,7 +486,7 @@ node bin/voicepack.mjs lint --privacy
 `package.json` has **no `dependencies` key**, and the suite fails if one appears.
 That is a design constraint, not an accident.
 
-Nine invariants are enforced by tests rather than by discipline, because each one
+Ten invariants are enforced by tests rather than by discipline, because each one
 fails silently in production:
 
 | Invariant | Why it is tested |
@@ -471,6 +500,7 @@ fails silently in production:
 | the intake prompt lists exactly `DETECT_TYPES` | a promised type the linter cannot evaluate is a rule that never runs |
 | `forbiddenWords` fires under both field spellings | it silently scored a violating draft at 100/ship |
 | `apply` refuses traversal paths and third-party exemplars | a bundle is the easiest place to smuggle either one in |
+| an empty profile is reported as empty | it packs into a clean-looking skeleton that writes generic prose |
 
 Every one of those was found by testing rather than by review. That is the argument
 for the tests, not for the review.

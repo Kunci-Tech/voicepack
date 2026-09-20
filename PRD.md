@@ -10,7 +10,7 @@
 | **First target** | WorkBuddy AI skill (adapters for other agents later) |
 | **Repository model** | Public engine repo + private profile data, out of tree |
 | **First brand profile** | Kunci Kuppi (data, not the product) |
-| **Status** | Phase 0 implemented; 136/136 smoke assertions passing |
+| **Status** | Phase 0 implemented; 148/148 smoke assertions passing |
 | **Version** | 0.6 |
 | **Date** | 20 September 2026 |
 
@@ -23,8 +23,10 @@
 > `<PROFILE_ID>` placeholders, so no brand data enters the public engine tree.
 > `DETECT_TYPES` became an exported contract that `lint` reports against and the
 > test suite checks the prompt against, after defect 6 below showed that a rule
-> whose predicate cannot run scores a violating draft at 100/ship. Principle 18
-> added. Four defects found by testing (6–9) recorded; assertions 89 → 136.
+> whose predicate cannot run scores a violating draft at 100/ship. `context` and
+> `pack` now report an empty profile instead of handing over a clean-looking
+> skeleton (defect 10). Principle 18 added. Five defects found by testing (6–10)
+> recorded; assertions 89 → 148.
 
 > **Changelog — v0.5.** Added §3.6 (the interface is agent-first) and principles
 > 15–17. Installation became a paste-able prompt rather than a procedure
@@ -85,7 +87,7 @@ These are the opinions the architecture is built on. Violating them breaks the p
 15. **The interface is designed for an agent, not for a person.** The human never types `voicepack`. Output is parseable records with meaningful exit codes, `pack` separates artefact from diagnostics, and nothing blocks on input (§3.6).
 16. **The user never opens a terminal.** Installation is a block of text the user pastes into the agent they already use; that agent performs every step and reports back in plain language (§3.6).
 17. **A promise that is not tested is not a promise.** Zero dependencies, engine/data separation, install-prompt/INSTALL.md parity, the genericness of the intake prompt, and `apply`'s path and provenance guards are asserted by the test suite, because each one fails silently otherwise (§3.5, §3.6, §5.7).
-18. **A rule that cannot run is indistinguishable from a rule that passes.** Both look like a clean check and a shipping draft. So a `detect` block the linter cannot evaluate is reported rather than ignored, and the list of types it can evaluate is exported, tested against the prompt, and named in one place (§6).
+18. **A check that cannot run is indistinguishable from a check that passes.** A `detect` block the linter cannot evaluate, and an empty profile that packs into defaults, both produce output identical to the working case — a clean check and a shipping draft. So an unsupported type is reported rather than ignored, `DETECT_TYPES` is exported and tested against the prompt, and an empty profile is named as empty instead of handed over as a valid pack (§6, §5.7).
 
 ---
 
@@ -238,14 +240,15 @@ Four design details were settled during the build and are worth recording:
 - **Output is agent-first, and the exit codes are part of the contract.** The
   `1`/`2` split (§3.6) is the piece that most affects how an agent behaves, because
   it is the difference between "fix and retry" and "stop, the answer is no".
-- **Five invariants are tested rather than trusted**: zero dependencies, engine
+- **Six invariants are tested rather than trusted**: zero dependencies, engine
   tree free of brand data, `install/prompt.txt` identical to the copy embedded
   in `INSTALL.md`, `install/profile-prompt.txt` keeping its `<BRAND_BRIEF>` /
   `<PROFILE_ID>` placeholders and listing exactly the detect types the linter
-  supports, and `apply` refusing path traversal and third-party exemplars. Each
-  fails silently in production otherwise.
+  supports, `apply` refusing path traversal and third-party exemplars, and an
+  empty profile being reported as empty rather than packed silently. Each fails
+  silently in production otherwise.
 
-**Nine defects found by testing, not by review.** Worth recording, because each was
+**Ten defects found by testing, not by review.** Worth recording, because each was
 invisible on inspection and would have shipped:
 
 1. **A dangling exemplar heading.** At `--max-tokens 300` the compiler emitted
@@ -278,11 +281,25 @@ invisible on inspection and would have shipped:
    moment it was the whole point of the message.
 9. **An unsupported `detect.type` passed silently.** `lint` had no opinion on it, so
    a rule whose predicate could never run looked identical to one that always passed.
+10. **An empty profile packed into a clean-looking skeleton.** Found by executing the
+    install prompt end to end rather than reading it. A freshly scaffolded profile
+    has no rules and no exemplars, yet `pack` returned a well-formed 250-token pack
+    (base defaults plus the banned-word list), `context` pointed at `pack` as the
+    next step, and `check` passed a draft written from it — because there was nothing
+    in the pack to violate. An agent would have written generic prose and reported
+    success, which is precisely the outcome the tool exists to prevent. Both commands
+    now report the profile as empty and redirect to the intake prompt. `pack` keeps
+    exit `0`: the artefact is valid, so the write loop must not break — the
+    *instruction* is what was wrong.
 
-Defects 6 and 9 share a shape and are the reason `DETECT_TYPES` is exported and the
-prompt is tested against it: **a rule that cannot run is indistinguishable from a
-rule that passes.** Both were found by writing a draft that deliberately violated a
-rule, then checking that the score actually dropped — not by reading the code.
+Defects 6, 9 and 10 share a shape: **a check that cannot run is indistinguishable
+from a check that passes.** 6 and 9 are the same bug in two places, which is why
+`DETECT_TYPES` is now exported, reported against by `lint`, and tested against the
+prompt. 10 is that shape applied to the whole pipeline rather than one rule: an
+empty profile produces output that is structurally identical to a working one.
+None of the three was found by reading code. 6 and 9 were found by writing a draft
+that deliberately breaks a rule and asserting the score drops; 10 was found by
+executing the install prompt as an agent would.
 
 
 **The data — private, never forked, never PR'd.**
