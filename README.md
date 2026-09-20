@@ -377,9 +377,14 @@ npx voicepack diff
 npx voicepack merge --id L-0007
 ```
 
-`ingest` extracts a **pattern**, never the text: first-line length, sentence rhythm,
-whether it opens on a number, how it closes. It records what it deliberately did not
-take — topic, phrasing, author identity.
+`ingest` extracts a **pattern** — first-line length, sentence rhythm, whether it opens
+on a number, how it closes. It records what it deliberately did not take: topic,
+phrasing, author identity.
+
+The one exception is your own post. Pass `--own` and the text is kept too, because an
+exemplar is a verbatim sample of how you write and there is nothing else it could be
+built from. Someone else's text is still discarded — that is what `provenance:
+third-party` is for.
 
 **Own content vs third-party.** Your own post can become an *exemplar*. Someone
 else's post can only become a *rule about structure*. The merge guard enforces this:
@@ -387,6 +392,16 @@ else's post can only become a *rule about structure*. The merge guard enforces t
 ```
 $ npx voicepack merge --id L-0001 --as exemplar
 error: Candidate L-0001 is third-party. Only your own content may become an exemplar.
+```
+
+Your own post goes through, and the merge registers the new file in the channel so
+`pack` actually reads it:
+
+```
+$ npx voicepack merge --id L-0002 --as exemplar
+id: L-0002
+mergedAs: exemplar
+file: profiles/acme/exemplars/threads/L-0002-first-line-short-38-chars.md
 ```
 
 That is the right call twice over. Legally, storing a stranger's post to shape your

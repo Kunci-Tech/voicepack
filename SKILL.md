@@ -136,7 +136,9 @@ PROPOSED (candidate — 1 instance, cannot become a hard rule yet)
 Three things to get right here:
 
 - **Synthesize the pattern, never the text.** The point is the structural trick, not
-  the wording. Never offer to copy phrasing.
+  the wording. Never offer to copy phrasing. The single exception is the user's own
+  post, where `--own` also retains the text — an exemplar has to be their real words,
+  and `merge --as exemplar` refuses rather than write an empty one.
 - **It lands as a candidate, not a rule.** One post is one data point. It becomes a
   soft signal immediately and promotes to a hard rule only after three independent
   instances agree.

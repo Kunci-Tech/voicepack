@@ -244,6 +244,50 @@ ok('own content may become an exemplar', own.mayBecomeExemplar === true);
 const ownMerge = run(['merge', '--dir', data, '-p', 'acme', '--id', own.id, '--as', 'exemplar']);
 ok('merge accepts own content as exemplar', ownMerge.code === 0, ownMerge.stderr.trim());
 
+// Exit 0 is not evidence that anything usable was written. `merge --as exemplar`
+// used to report success while writing frontmatter over an empty body, and it
+// never listed the file in the channel — so the exemplar cleared every guard in
+// `lint`, never reached the pack, and taught the agent nothing. The old
+// assertion here checked the exit code and nothing else, which is why it passed
+// the whole time.
+const ownRel = (ownMerge.stdout.match(/^file:\s*(.+)$/m) ?? [])[1] ?? '';
+const ownFile = path.join(data, ownRel);
+const ownRaw = fs.existsSync(ownFile) ? fs.readFileSync(ownFile, 'utf8') : '';
+const ownBody = ownRaw.replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+ok('merge reports the exemplar path', Boolean(ownRel), ownMerge.stdout.trim());
+ok('the exemplar file exists', fs.existsSync(ownFile), ownFile);
+ok('the exemplar has a body, not just frontmatter', ownBody.length > 0, JSON.stringify(ownRaw.slice(0, 120)));
+ok('the exemplar keeps our own words', ownBody === String(own.text).trim(), JSON.stringify(ownBody.slice(0, 80)));
+
+// Writing the file is half the job: `loadExemplars` reads the channel's
+// `exemplars` array, so an unregistered file is invisible to `pack`.
+const regRel = path.posix.join('exemplars', 'instagram', path.basename(ownFile));
+const chAfter = JSON.parse(fs.readFileSync(path.join(data, 'profiles', 'acme', 'channels', 'instagram.json'), 'utf8'));
+ok('the exemplar is registered in the channel', (chAfter.exemplars ?? []).includes(regRel), JSON.stringify(chAfter.exemplars));
+ok('the registered path is the one loadExemplars resolves', fs.existsSync(path.join(data, 'profiles', 'acme', regRel)));
+
+const packedAfter = json(['pack', '--dir', data, '-p', 'acme', '-c', 'instagram', '--json']);
+ok('the new exemplar reaches the pack', packedAfter.included.includes('exemplars'));
+
+// The other half of the guard: a candidate with no text must not produce an
+// exemplar. An empty one is stamped `human-written` and passes every check.
+const noTextId = 'L-0999';
+fs.writeFileSync(
+  path.join(data, 'candidates', `${noTextId}.json`),
+  JSON.stringify({
+    id: noTextId, ts: '2026-01-01T00:00:00.000Z', type: 'candidate', status: 'pending',
+    profile: 'acme', channel: 'instagram', pattern: 'a candidate ingested before the text was kept',
+    provenance: 'human-written', mayBecomeExemplar: true, instances: 1,
+    evidence: [{ url: 'https://example.com/legacy' }],
+  })
+);
+const noText = run(['merge', '--dir', data, '-p', 'acme', '--id', noTextId, '--as', 'exemplar']);
+ok('merge refuses an exemplar with no text', noText.code === 1 && /carries no text/.test(noText.stderr), noText.stderr.trim());
+ok('the refusal points at the fix', /--text/.test(noText.stderr), noText.stderr.trim());
+const wroteEmpty = fs.existsSync(path.join(data, 'profiles', 'acme', 'exemplars', 'instagram'))
+  && fs.readdirSync(path.join(data, 'profiles', 'acme', 'exemplars', 'instagram')).some((f) => f.startsWith(noTextId));
+ok('the refusal writes no file at all', !wroteEmpty);
+
 // ---------------------------------------------------------------- diff / list / doctor
 const diff = json(['diff', '--dir', data, '--json']);
 ok('merged candidates leave the pending list', diff.every((c) => c.status === 'pending'));

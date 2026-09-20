@@ -604,7 +604,9 @@ async function main() {
         fail(e.message, {
           next: /third-party/.test(e.message)
             ? `merge it as a rule instead: \`voicepack merge --id ${id}\``
-            : 'run `voicepack diff` to see pending candidates',
+            : /carries no text/.test(e.message)
+              ? `re-ingest the post with --own, or pass it verbatim: \`voicepack merge --id ${id} --as exemplar --text "..."\``
+              : 'run `voicepack diff` to see pending candidates',
         });
       }
 
