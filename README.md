@@ -42,6 +42,55 @@ is the only requirement.
 
 ---
 
+## Getting a brand in: the intake prompt
+
+An empty profile is just a scaffold. Filling it means answering questions about how
+the brand actually writes, and that is a job for a model with a good prompt — not for
+a person typing JSON.
+
+```bash
+npx voicepack profile-prompt \
+  --brand "Acme Bakehouse — a bakery in Leeds. Posts in English, occasionally Polish." \
+  -p acme
+```
+
+That prints a prompt to paste into any capable model. It works in two passes on
+purpose: first it asks up to six questions and writes a plain-language description of
+the voice, and **only after you confirm that description** does it emit JSON. The
+description is the step that catches a wrong reading of the brand before it is baked
+into 40 fields.
+
+The JSON it returns is a *bundle* — file paths as keys, file contents as values. Save
+it and hand it to `apply`:
+
+```bash
+npx voicepack apply --dir ~/voicepack --file bundle.json --force
+```
+
+`apply` is more than a copy, and the differences all exist because the bundle is
+model-generated and therefore untrusted:
+
+| Guard | Why |
+|---|---|
+| Paths are validated segment by segment | A key of `../../../../.ssh/authorized_keys` must not write anywhere. |
+| Only `human-written` / `human-approved` may be an exemplar | A bundle is the easiest place to smuggle in someone else's post. `third-party` is refused, not warned about. |
+| JSON files are **filled**, not replaced | `init` scaffolds `extends: "_base"`; a bundle answering only `identity` must not detach the profile from the base lexicon. Arrays replace, so re-applying does not duplicate. |
+| `_needsInput` and `_inferred` are surfaced | The prompt forbids guessing. Whatever it still could not answer comes back as a question, and whatever it inferred is flagged for review. |
+| The result is linted before the command exits | An import that leaves the profile invalid is not a success. |
+
+Two override rules do the heavy lifting inside the prompt. **Never invent** — a
+beautiful guess is loaded as fact and silently distorts every future post, so unknown
+fields come back blank and listed. **Never fabricate an exemplar** — exemplars are
+copied character for character from real posts, or omitted. An invented exemplar
+teaches a voice the brand does not have, and it is the hardest error to notice later.
+
+The prompt itself ships **generic**. It carries `<BRAND_BRIEF>` and `<PROFILE_ID>`
+placeholders that the CLI fills in, so no customer's name ever lands in this public
+repo. The test suite asserts both placeholders survive, because the alternative is
+brand data in the engine tree — the one thing the two-tree rule exists to prevent.
+
+---
+
 ## The idea: the CLI is a context firewall
 
 The naive approach is a growing `persona.json` pasted into the prompt. It fails in a
@@ -204,6 +253,23 @@ Layer 1 is **data-driven**. Rules carry machine-checkable predicates:
 Supported: `regex`, `maxChars`, `minChars`, `maxEmoji`, `maxHashtags`, `minHashtags`,
 `maxExclamations`, `maxSentenceWords`, `maxParagraphLines`, `forbiddenWords`.
 
+Every one of them takes its payload under `"value"` — except `forbiddenWords`,
+which takes `"words": ["handcrafted"]`. Both spellings work there, because every
+other type uses `value` and it is the natural guess, but `words` is canonical.
+
+An unsupported `type` is ignored at check time, which would make a rule look
+machine-checked while passing everything. So `lint` reports it instead:
+
+```
+warn: Rule "vp-instagram-001" has unknown detect type "maxWords" — it will never run.
+      Supported: regex, maxChars, minChars, maxEmoji, maxHashtags, minHashtags,
+      maxExclamations, maxSentenceWords, maxParagraphLines, forbiddenWords.
+```
+
+`DETECT_TYPES` in `lib/check.mjs` is the single source of truth for that list. Add
+a type there in the same commit as its `case`; the test suite checks the install
+prompt against it so the two cannot drift.
+
 ```
 $ voicepack check -p demo -c instagram -f examples/draft-bad.md
 score: 60
@@ -297,7 +363,9 @@ preferred. Others' content targeted, not harvested.
 ```
 voicepack context          [--json]                    orient a fresh session
 voicepack install-prompt   [--repo <url>] [--json]     the bootstrap prompt
+voicepack profile-prompt   [--json]                    the brand-intake prompt
 voicepack init     --dir <path> --profile <name>
+voicepack apply    --file <bundle.json> [-p P] [--force]
 voicepack doctor   [--json]
 voicepack pack     -p P -c C [-i INTENT] [--max-tokens N] [--json] [--verbose]
 voicepack check    -p P -c C [-f draft.md | --text "..."] [--json] [--quiet]
@@ -389,7 +457,7 @@ node bin/voicepack.mjs lint --privacy
 `package.json` has **no `dependencies` key**, and the suite fails if one appears.
 That is a design constraint, not an accident.
 
-Five invariants are enforced by tests rather than by discipline, because each one
+Nine invariants are enforced by tests rather than by discipline, because each one
 fails silently in production:
 
 | Invariant | Why it is tested |
@@ -399,6 +467,10 @@ fails silently in production:
 | the committed demo fixture is not gitignored | an unanchored `profiles/` pattern would exclude it, leaving CI with nothing to run |
 | `INSTALL.md` matches `install/prompt.txt` verbatim | documentation drift is invisible otherwise |
 | demo `_base` lexicon matches what `init` scaffolds | the fixture had already drifted by 12 entries |
+| the intake prompt keeps `<BRAND_BRIEF>` / `<PROFILE_ID>` | otherwise one customer's brand ships in this public repo |
+| the intake prompt lists exactly `DETECT_TYPES` | a promised type the linter cannot evaluate is a rule that never runs |
+| `forbiddenWords` fires under both field spellings | it silently scored a violating draft at 100/ship |
+| `apply` refuses traversal paths and third-party exemplars | a bundle is the easiest place to smuggle either one in |
 
 Every one of those was found by testing rather than by review. That is the argument
 for the tests, not for the review.

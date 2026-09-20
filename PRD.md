@@ -10,11 +10,21 @@
 | **First target** | WorkBuddy AI skill (adapters for other agents later) |
 | **Repository model** | Public engine repo + private profile data, out of tree |
 | **First brand profile** | Kunci Kuppi (data, not the product) |
-| **Status** | Phase 0 implemented; 89/89 smoke assertions passing |
-| **Version** | 0.5 |
-| **Date** | 19 September 2026 |
+| **Status** | Phase 0 implemented; 136/136 smoke assertions passing |
+| **Version** | 0.6 |
+| **Date** | 20 September 2026 |
 
 > **Naming.** The product is generic and intended for open source. "Kunci Kuppi" is a *brand profile* — a folder of data inside Voicepack, not the product's identity. Any business can drop in its own profile.
+
+> **Changelog — v0.6.** Added §5.7: how an empty profile gets filled —
+> `install/profile-prompt.txt` (a two-pass interview prompt), `voicepack
+> profile-prompt`, and `voicepack apply` (a bundle importer with path and
+> provenance guards). The intake prompt is generic and carries `<BRAND_BRIEF>` /
+> `<PROFILE_ID>` placeholders, so no brand data enters the public engine tree.
+> `DETECT_TYPES` became an exported contract that `lint` reports against and the
+> test suite checks the prompt against, after defect 6 below showed that a rule
+> whose predicate cannot run scores a violating draft at 100/ship. Principle 18
+> added. Four defects found by testing (6–9) recorded; assertions 89 → 136.
 
 > **Changelog — v0.5.** Added §3.6 (the interface is agent-first) and principles
 > 15–17. Installation became a paste-able prompt rather than a procedure
@@ -74,7 +84,8 @@ These are the opinions the architecture is built on. Violating them breaks the p
 14. **The bridge is an ingest adapter, not a core dependency.** The store and the write-time loop must work with it absent.
 15. **The interface is designed for an agent, not for a person.** The human never types `voicepack`. Output is parseable records with meaningful exit codes, `pack` separates artefact from diagnostics, and nothing blocks on input (§3.6).
 16. **The user never opens a terminal.** Installation is a block of text the user pastes into the agent they already use; that agent performs every step and reports back in plain language (§3.6).
-17. **A promise that is not tested is not a promise.** Zero dependencies, engine/data separation, and install-prompt/INSTALL.md parity are asserted by the test suite, because each one fails silently otherwise (§3.5, §3.6).
+17. **A promise that is not tested is not a promise.** Zero dependencies, engine/data separation, install-prompt/INSTALL.md parity, the genericness of the intake prompt, and `apply`'s path and provenance guards are asserted by the test suite, because each one fails silently otherwise (§3.5, §3.6, §5.7).
+18. **A rule that cannot run is indistinguishable from a rule that passes.** Both look like a clean check and a shipping draft. So a `detect` block the linter cannot evaluate is reported rather than ignored, and the list of types it can evaluate is exported, tested against the prompt, and named in one place (§6).
 
 ---
 
@@ -227,11 +238,14 @@ Four design details were settled during the build and are worth recording:
 - **Output is agent-first, and the exit codes are part of the contract.** The
   `1`/`2` split (§3.6) is the piece that most affects how an agent behaves, because
   it is the difference between "fix and retry" and "stop, the answer is no".
-- **Three invariants are tested rather than trusted**: zero dependencies, engine
-  tree free of brand data, and `install/prompt.txt` identical to the copy embedded
-  in `INSTALL.md`. Each fails silently in production otherwise.
+- **Five invariants are tested rather than trusted**: zero dependencies, engine
+  tree free of brand data, `install/prompt.txt` identical to the copy embedded
+  in `INSTALL.md`, `install/profile-prompt.txt` keeping its `<BRAND_BRIEF>` /
+  `<PROFILE_ID>` placeholders and listing exactly the detect types the linter
+  supports, and `apply` refusing path traversal and third-party exemplars. Each
+  fails silently in production otherwise.
 
-**Five defects found by testing, not by review.** Worth recording, because each was
+**Nine defects found by testing, not by review.** Worth recording, because each was
 invisible on inspection and would have shipped:
 
 1. **A dangling exemplar heading.** At `--max-tokens 300` the compiler emitted
@@ -249,6 +263,26 @@ invisible on inspection and would have shipped:
 5. **`install/` was missing from `package.json` `files`.** `install-prompt` reads
    that file at runtime, so the command worked perfectly from a clone and would have
    broken for everyone installing from npm.
+6. **`forbiddenWords` never fired.** The install prompt documented the field as
+   `"value"`, like every other detect type; the code read `"words"`. A draft using a
+   hard-banned word therefore scored **100/ship** against a rule written to catch it.
+   This is the worst defect in the list, because the failure is invisible from both
+   ends and the artefact that was wrong is the one a model is told to trust.
+7. **`apply --force` destroyed the scaffold.** It replaced JSON files wholesale, so
+   importing a bundle that answered only `identity` silently dropped
+   `extends: "_base"` — detaching the profile from the base lexicon and channel rules
+   with no error anywhere. Now filled rather than replaced (§5.7).
+8. **A missing exemplar reported as `undefined`.** `loadExemplars` built its
+   "missing" record without a `rel` field, which is exactly what the caller printed:
+   `references a missing exemplar file: undefined`. The path was lost at the one
+   moment it was the whole point of the message.
+9. **An unsupported `detect.type` passed silently.** `lint` had no opinion on it, so
+   a rule whose predicate could never run looked identical to one that always passed.
+
+Defects 6 and 9 share a shape and are the reason `DETECT_TYPES` is exported and the
+prompt is tested against it: **a rule that cannot run is indistinguishable from a
+rule that passes.** Both were found by writing a draft that deliberately violated a
+rule, then checking that the score actually dropped — not by reading the code.
 
 
 **The data — private, never forked, never PR'd.**
@@ -597,6 +631,33 @@ Append-only. Every event, merged or rejected.
 {"id":"L-0043","ts":"2026-09-19T10:31:00+07:00","type":"rule","target":"vp-th-007","diff":"+ strength: hard","approvedBy":"founder","status":"merged","version":"1.1.0"}
 ```
 
+### 5.7 Getting a brand in: the intake prompt and `apply`
+
+Everything above describes a profile that already exists. Filling an empty one is the first thing a user does, and it is the highest-leverage moment in the whole system: a wrong assumption here is written to disk as fact and shapes every draft afterwards. Two artefacts carry that step.
+
+**`install/profile-prompt.txt`** is a prompt the user pastes into a general-purpose model. It is not a form. It works in two passes on purpose: pass 1 asks at most six questions and writes a plain-language description of the voice in under 200 words; pass 2 emits the JSON bundle, and only after the user has confirmed that description. The description is the cheap place to catch a wrong reading of the brand — before it is spread across forty fields.
+
+Two rules override everything else in the prompt:
+
+- **Never invent.** Unknown values come back as `""` / `[]` / `null` and the field name is added to a top-level `_needsInput`. A plausible guess is worse than a blank, because a blank is visibly missing and a guess is not.
+- **Never fabricate an exemplar.** Exemplars are copied character for character from real posts, typos and line breaks included, or omitted. An invented exemplar teaches the model a voice the brand does not have, and it is the hardest class of error to notice later.
+
+**The prompt ships generic.** It carries `<BRAND_BRIEF>` and `<PROFILE_ID>` placeholders that `voicepack profile-prompt --brand "…" -p <id>` substitutes at run time. This is not tidiness — this repository is public, and a prompt naming one customer's brand would be brand data in the engine tree, which is the single thing §3.4 exists to prevent. The test suite asserts both placeholders survive, and that the file lists exactly the detect types `lib/check.mjs` can evaluate.
+
+**`voicepack apply`** turns the returned bundle into files. It is not a copy, and every difference exists because the bundle is model-generated and therefore untrusted:
+
+| Guard | Failure it prevents |
+|---|---|
+| Paths validated segment by segment, confined to the profile | A key of `../../../../.ssh/authorized_keys` writing anywhere on the machine, with output that looks completely normal. |
+| Exemplars must be `human-written` or `human-approved` | A bundle is the easiest place in the system to smuggle in someone else's post. `third-party` is refused (exit 1), not warned about. |
+| JSON files are **filled**, not replaced | `init` scaffolds `extends: "_base"`. A bundle answering only `identity` would otherwise silently detach the profile from the base lexicon and channel rules. Objects merge; **arrays replace**, so re-applying an updated bundle does not grow `["warmth"]` into `["warmth", "warmth"]`. |
+| `_needsInput` / `_inferred` are surfaced | The prompt forbids guessing, so whatever it still could not answer must reach the human as a question, and whatever it inferred must be flagged for review. |
+| The result is linted before the command exits | An import that leaves the profile invalid is not a success. `apply` exits 1, and the bundle — not the profile — is the cheap place to fix it. |
+
+`--force` is what fills an existing scaffold: without it, files that already exist are skipped rather than overwritten. There is no hard-replace mode; delete the file first if that is genuinely what you want. The default should be the one that cannot destroy `extends`.
+
+This is the `apply` fill-merge, deliberately distinct from the `deepMerge` used for `extends`. `deepMerge` **concatenates** arrays, which is right when a profile's rules are additive to its base's, and wrong here: re-applying an updated bundle would duplicate every list. Two merge functions with different array semantics is a real cost, paid because one function cannot be correct for both jobs.
+
 ---
 
 ## 6. The Write-Time Loop
@@ -642,6 +703,15 @@ So checking splits in two, and the split is what makes Phase 0 shippable with no
 ```
 
 Supported `detect.type` values: `regex`, `maxChars`, `minChars`, `maxEmoji`, `maxHashtags`, `minHashtags`, `maxExclamations`, `maxSentenceWords`, `maxParagraphLines`, `forbiddenWords`.
+
+**This list is a contract, not documentation.** `DETECT_TYPES` in `lib/check.mjs` is the single source of truth, and two things depend on it:
+
+- **`lint` reports an unsupported type instead of ignoring it.** A `detect` block whose type the linter cannot evaluate is strictly worse than no `detect` block at all: the rule *looks* machine-checked, so a draft that breaks it scores 100 and ships. The failure is invisible from both ends — the rule author sees a clean check, and the draft author sees a passing draft. `lint` therefore warns `has unknown detect type "X" — it will never run`, and the same warning covers a `forbiddenWords` rule with no words.
+- **The install prompt is checked against it by the test suite.** A model writing rules from the prompt must not be promised a type the linter cannot evaluate, and the prompt must not omit a type the linter supports. The suite extracts the types the prompt lists and asserts set equality with `DETECT_TYPES`, so adding a type means editing both in one commit.
+
+All types take their payload under `"value"` except `forbiddenWords`, which takes `"words"`. That inconsistency is historical, but the cost of it is not: every other type uses `value`, so `value` is the natural guess, and a guessed-but-wrong field name produced a rule that silently never fired — a draft using the forbidden word scored **100/ship**. `forbiddenWords` now accepts both spellings, with `words` canonical. Tolerating the near-miss is the right call here precisely because the alternative is a silent no-op.
+
+For the same reason, a violation whose `detect.message` is an empty string falls back to the rule text. The schemas hand models `"message": ""`, and `d.message ?? rule.text` keeps the blank — so the report read `violation: HARD vp-instagram-001 | ` with nothing after the pipe, at exactly the moment the agent needs to know what broke.
 
 **Layer 1 also runs against rules that carry no `detect`** — it falls back to the channel's declared constraints and the lexicon. So a profile with zero predicates still gets useful checking on day one, and gains precision as predicates are added.
 
@@ -1105,6 +1175,7 @@ an interface contract rather than a UI. See §3.6 for the rules that shape it.
 ```
 voicepack context          [--json]                  orient a fresh session
 voicepack install-prompt   [--repo <url>] [--json]   the bootstrap prompt
+voicepack profile-prompt   [--brand "<brief>"] [-p P] [--json]   the intake prompt
 voicepack doctor           [--json]                  preflight: node, data dir, bridge
 voicepack recipes          [--json]                  capture recipes
 voicepack list             [--json]                  profiles with counts
@@ -1119,6 +1190,7 @@ voicepack diff     [--json]
 voicepack merge    -p P --id L-0001 [--as rule|hard|exemplar] [--text "..."]
 
 voicepack init     --dir <path> [-p name] [--force]
+voicepack apply    --file <bundle.json> [-p P] [--force] [--json]
 voicepack lint     -p P  |  voicepack lint --privacy
 voicepack history  [--json]
 voicepack rollback --to <ref> [-p P]

@@ -1,0 +1,317 @@
+You are helping me capture the writing voice of a brand so it can be stored as
+structured data and reused by an AI writing assistant. The output you produce
+will be loaded verbatim as fact and will shape every future post, so accuracy
+matters far more than completeness.
+
+THE BRAND
+<BRAND_BRIEF>
+
+═══════════════════════════════════════════════════════════════════════════
+TWO RULES THAT OVERRIDE EVERYTHING ELSE
+═══════════════════════════════════════════════════════════════════════════
+
+RULE 1 — NEVER INVENT.
+If you do not know something, use "" for a string, [] for a list, or null for a
+number, and add the field name to a "_needsInput" array. A beautiful guess is
+worse than a blank: it gets loaded as fact and silently distorts every post we
+write from then on. Do not fill a field because the schema expects one. Do not
+infer our voice from what businesses like ours usually sound like — we are not a
+typical one, which is the entire reason we are doing this.
+
+RULE 2 — NEVER FABRICATE AN EXEMPLAR.
+Exemplars are real posts we actually published. Copy them exactly, character for
+character, including typos and line breaks. If I have not given you a real post,
+leave the exemplars list empty. An invented post teaches the system a voice we do
+not have, and it is the hardest kind of error to notice later.
+
+═══════════════════════════════════════════════════════════════════════════
+WHAT I WILL GIVE YOU
+═══════════════════════════════════════════════════════════════════════════
+
+I will paste: real posts we have published, words we like and refuse to use, how
+we talk to customers, what we argue about internally, and anything else I have.
+It will be messy and out of order. Sorting it is your job.
+
+If something important is missing, ASK. Ask at most 6 questions, and only for
+things you genuinely cannot infer. The highest-value things to ask about are:
+
+  1. How do we open a post? What do we never open with?
+  2. How do we close one? Question, statement, or nothing?
+  3. What would we never say, even if it would work?
+  4. Where is the line between our languages — what stays in the other language,
+     and what never does?
+  5. Who are we actually talking to? (not "coffee lovers" — be specific)
+  6. What do we believe that most bakeries would disagree with?
+
+═══════════════════════════════════════════════════════════════════════════
+HOW TO WORK — TWO PASSES
+═══════════════════════════════════════════════════════════════════════════
+
+PASS 1 — Ask your questions. Then write a plain-language description of our
+voice in under 200 words, as if briefing a new copywriter. I will correct it.
+DO NOT OUTPUT JSON YET.
+
+PASS 2 — Only after I confirm or correct that description, output the JSON
+bundle specified below.
+
+═══════════════════════════════════════════════════════════════════════════
+THE JSON TO PRODUCE
+═══════════════════════════════════════════════════════════════════════════
+
+Output ONE JSON object. Keys are file paths, values are file contents. Output
+nothing else — no commentary, no markdown fences, just the JSON.
+
+{
+  "profile": "<PROFILE_ID>",
+  "files": {
+    "brand.json": { ... },
+    "voice.json": { ... },
+    "lexicon.json": { ... },
+    "channels/<channel>.json": { ... },
+    "exemplars/<channel>/<YYYY-MM-DD>-<slug>.md": "---\nid: ...\n---\n\n<the real post>\n"
+  }
+}
+
+Use <PROFILE_ID> verbatim as both "profile" and "brandId" — it is the folder name
+our tooling writes to, so it must stay lowercase and free of spaces. Only include
+channels I have actually given you information about. An empty or guessed channel
+is worse than an absent one.
+
+───────────────────────────────────────────────────────────────────────────
+brand.json — who we are
+───────────────────────────────────────────────────────────────────────────
+
+{
+  "brandId": "<PROFILE_ID>",
+  "extends": "_base",
+  "version": "1.0.0",
+  "identity": {
+    "name": "",              // our name, written the way we write it
+    "category": "",          // the plain description we would give a stranger
+    "oneLiner": "",          // our actual positioning line, not a slogan you write
+    "founded": "",           // YYYY-MM-DD, or "" if unknown
+    "home": ""               // where we are, as we would say it
+  },
+  "audience": {
+    "primary": [],           // specific people, not demographics
+    "secondary": [],
+    "whatTheyWant": []       // what they want FROM US, in their words
+  },
+  "pov": {
+    "worldview": "",         // one sentence: what we believe about our craft
+    "tensions": [],          // real trade-offs we navigate, e.g. "craft vs. volume"
+    "alwaysChampions": [],   // who/what we defend publicly
+    "neverTakes": []         // positions we refuse to take
+  },
+  "values": [],
+  "codeSwitching": {
+    "default": "id",         // "id" or "en"
+    "allowEnglish": [],      // specific English words/phrases we do use
+    "never": []              // e.g. "forced slang", "English CTA"
+  }
+}
+
+───────────────────────────────────────────────────────────────────────────
+voice.json — how we sound
+───────────────────────────────────────────────────────────────────────────
+
+{
+  "_replace": ["moves"],
+  "signature": {
+    "person": "first-plural",   // first-plural | first-singular | second-person | third-person
+    "formality": 0.0,           // 0.0 = casual ... 1.0 = formal
+    "warmth": 0.0,
+    "playfulness": 0.0,
+    "humility": 0.0,
+    "salesPressure": 0.0        // 0.0 = never sells ... 1.0 = hard sell
+  },
+  "mechanics": {
+    "avgSentenceWords": null,   // a number, from the real posts I gave you
+    "maxSentenceWords": null,
+    "maxLinesPerParagraph": null,
+    "openingMove": "",          // e.g. "a concrete number or a named person, never a claim"
+    "closingMove": ""
+  },
+  "moves": [
+    { "id": "mv-001", "text": "", "example": "" }
+  ]
+}
+
+The dials must be derived from the real posts, not from how we would like to
+sound. If the posts are warm but you would prefer cooler, the number reflects the
+posts.
+
+Every "moves" entry needs a real "example" taken from one of our posts. A move
+without an example is decoration — drop it.
+
+───────────────────────────────────────────────────────────────────────────
+lexicon.json — words in and out
+───────────────────────────────────────────────────────────────────────────
+
+{
+  "_replace": [],
+  "signatureWords": [],        // words/phrases that are distinctly ours
+  "banned": {
+    "aiSlop": [],              // leave EMPTY — see below
+    "brandSpecific": []        // words we refuse to use. See the starting list below.
+  },
+  "punctuation": {
+    "emDash": "avoid",         // avoid | rare | allow
+    "ellipsis": "rare",
+    "exclamationMax": 1
+  }
+}
+
+Leave "aiSlop" empty. It already carries 23 generic AI tells — "we're thrilled
+to announce", "elevate", "unleash", "nestled in the heart of" and the rest — and
+they are inherited automatically. Adding more of the same wastes the field.
+
+"brandSpecific" is for words that are wrong FOR US specifically: things our
+competitors say, things that sound like a different kind of business, things we
+have agreed never to write. That is a much more interesting list than another
+synonym for "artisanal".
+
+For brandSpecific, start from what I tell you and consider adding any of these
+that clash with our voice — but only ones you are confident about:
+  artisanal, mouth-watering, to die for, hidden gem, elevate, unleash,
+  game-changer, nestled in the heart of, look no further, must-try
+
+───────────────────────────────────────────────────────────────────────────
+channels/<channel>.json — how we sound HERE
+───────────────────────────────────────────────────────────────────────────
+
+{
+  "_replace": ["structure.beats"],
+  "channel": "instagram",
+  "version": "1.0.0",
+  "constraints": {
+    "maxChars": 2200,          // instagram 2200, threads 500
+    "hookWindowChars": 125,    // instagram 125, threads 60
+    "hashtags": { "min": 0, "max": 6, "style": "lowercase-mixed" },
+    "emojiPerPost": { "max": 2, "allowed": [] }   // only emoji we actually use
+  },
+  "structure": {
+    "beats": [],               // e.g. ["hook", "context", "substance", "invitation"]
+    "lineBreaks": "double",    // single | double
+    "ctaStyle": "soft-question"  // soft-question | none | direct
+  },
+  "exemplars": [],             // see the rule below — this list is load-bearing
+  "rules": [ ... ]
+}
+
+THE "exemplars" ARRAY IS LOAD-BEARING. Read this twice.
+A channel only uses the exemplars whose paths appear in this array. Nothing
+scans the directory. So every exemplar file you emit under "exemplars/<channel>/"
+MUST also appear here, written identically — same spelling, same folder, same
+.md extension. If you emit a file but forget to list it, the file is written and
+then silently ignored: the channel loses its examples and nobody sees an error.
+If you list a path but do not emit the file, the import fails outright. If you
+have no real posts for a channel, leave the array empty and do not create that
+channel file at all.
+
+RULES — each rule must be true, specific and checkable:
+
+{
+  "id": "vp-instagram-001",    // vp-<channel>-NNN, numbered from 001
+  "text": "Open with a concrete number or a named person, never a claim.",
+  "strength": "hard",          // hard = never violate, soft = preference
+  "why": "Numbers stop thumbs. Claims get scrolled past.",
+  "example": "5,223 loaves since April.",
+  "detect": { ... },           // optional, see below
+  "source": { "type": "user-teach", "date": "2026-09-20" },
+  "confidence": 0.9            // 0.0-1.0. Use 0.5 for anything you inferred.
+}
+
+Use "hard" only for things we would never break. Everything else is "soft".
+Aim for 3-6 rules per channel. Ten vague rules are worth less than three sharp ones.
+
+"detect" is OPTIONAL and lets the linter check the rule mechanically. Include it
+only when the rule is genuinely mechanical. Supported types, with their fields:
+
+  { "type": "regex",             "pattern": "^\s*(we'?re|our)\b", "flags": "im", "message": "" }
+  { "type": "maxChars",          "value": 2200, "message": "" }
+  { "type": "minChars",          "value": 80,   "message": "" }
+  { "type": "maxEmoji",          "value": 2,    "message": "" }
+  { "type": "maxHashtags",       "value": 6,    "message": "" }
+  { "type": "minHashtags",       "value": 3,    "message": "" }
+  { "type": "maxExclamations",   "value": 1,    "message": "" }
+  { "type": "maxSentenceWords",  "value": 20,   "message": "" }
+  { "type": "maxParagraphLines", "value": 2,    "message": "" }
+  { "type": "forbiddenWords",    "words": ["handcrafted"], "message": "" }
+
+Note the last one: it takes "words", NOT "value". Every other type uses "value",
+so this is the one place to be careful. Set "message" to something useful — it
+is what I will read when the rule fires. Leave it empty only if you have nothing
+better to say than the rule text itself.
+
+Do not invent other detect types — anything else is ignored, and a rule that
+looks machine-checked but is not is worse than a rule with no detect at all.
+
+───────────────────────────────────────────────────────────────────────────
+exemplars/<channel>/<YYYY-MM-DD>-<slug>.md — the real thing
+───────────────────────────────────────────────────────────────────────────
+
+Each exemplar is a markdown string. The frontmatter must be exact:
+
+---
+id: ig-2026-08-14-five-thousand-loaves
+channel: instagram
+intent: launch
+tags: [craft, team]
+performance: { likes: 812, saves: 140, comments: 63, viral: false }
+captured: 2026-08-14
+provenance: human-written
+why: "Opens with a number, names the baker, closes on an open question."
+---
+
+<the post text, exactly as published>
+
+intent must be one of: promo, launch, educational, community, reactive,
+behind-the-scenes, recruitment, apology
+
+provenance must be "human-written" or "human-approved". If a post was written by
+someone else — a customer, a partner, a repost — DO NOT include it as an exemplar.
+Only our own content may become an exemplar. Someone else's post can only teach a
+rule about structure, never become a model of our voice.
+
+"why" is one sentence naming the specific technique the post uses. Not "it is
+good" — what does it actually do?
+
+Performance numbers: use only what I give you. If I do not give you numbers, use
+{} and say so.
+
+═══════════════════════════════════════════════════════════════════════════
+RULES FOR THE JSON ITSELF
+═══════════════════════════════════════════════════════════════════════════
+
+- Valid JSON. No trailing commas. No comments. No markdown fences. No prose
+  before or after.
+- Escape newlines inside markdown strings as \n.
+- Keep every field from the schemas above, even when empty. Structure must be
+  predictable.
+- Add a top-level "_needsInput": [] listing every field you left blank because
+  you did not know it.
+- Add a top-level "_inferred": [] listing every field you filled by inference
+  rather than from something I told you. Be honest here — I need to review those.
+
+═══════════════════════════════════════════════════════════════════════════
+BEFORE YOU SEND, CHECK YOURSELF
+═══════════════════════════════════════════════════════════════════════════
+
+  1. Did I invent anything? Move every guess to _inferred or blank it out.
+  2. Is every exemplar a real post I was given, copied exactly?
+  3. Does every "exemplars/<channel>/..." key I emit appear, spelled identically,
+     in that channel's "exemplars" array — and does that array contain nothing
+     I did not emit?
+  4. Is every "why" a specific technique rather than praise?
+  5. Is every "moves" entry backed by a real example?
+  6. Does every rule have a real "why"?
+  7. Did I use only the 10 listed detect types?
+  8. Is "banned.aiSlop" empty, with our own refusals in "banned.brandSpecific"?
+  9. Would someone who knows this brand read this and say "yes, that is us" —
+     or would they say "that is what a business like this sounds like"?
+
+If the answer to 9 is the second one, go back. The generic answer is the failure
+mode we are trying to avoid.
+
+Now: ask your questions. Do not output JSON yet.

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DETECT_TYPES } from '../lib/check.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(root, 'bin', 'voicepack.mjs');
@@ -142,6 +143,35 @@ ok('install-prompt notes how to point at a fork', /--repo/.test(promptOut.stderr
 
 const promptJson = json(['install-prompt', '--repo', 'https://example.test/vp.git', '--json']);
 ok('install-prompt --repo substitutes the placeholder', promptJson.prompt.includes('https://example.test/vp.git') && !promptJson.prompt.includes('<ENGINE_REPO_URL>'));
+
+// The intake prompt is the other half of the pair: install-prompt gets the
+// engine onto a machine, profile-prompt gets a brand into the engine. It must
+// stay GENERIC — this repo is public, and a prompt that names one customer's
+// brand is brand data sitting in the engine tree, which is exactly what the
+// two-tree rule exists to prevent. The placeholders are the guard: they prove
+// the brand-specific text is injected at run time rather than committed.
+const profilePromptPath = path.join(root, 'install', 'profile-prompt.txt');
+const profilePromptRaw = fs.readFileSync(profilePromptPath, 'utf8');
+ok('the intake prompt file is present', fs.existsSync(profilePromptPath));
+ok('the intake prompt keeps the brand placeholder (stays generic)', profilePromptRaw.includes('<BRAND_BRIEF>'));
+ok('the intake prompt keeps the profile-id placeholder', profilePromptRaw.includes('<PROFILE_ID>'));
+
+const intake = run(['profile-prompt']);
+ok('profile-prompt exits 0', intake.code === 0, intake.stderr.trim());
+ok('profile-prompt writes the prompt to stdout only', intake.stdout.includes('NEVER INVENT') && !/^next: /m.test(intake.stdout));
+ok('profile-prompt puts its note on stderr', /^next: /m.test(intake.stderr));
+ok('profile-prompt leaves no bare placeholder behind', !intake.stdout.includes('<BRAND_BRIEF>'));
+
+const intakeFilled = run(['profile-prompt', '--brand', 'Acme Bakehouse, a test brand.', '-p', 'acme']);
+ok(
+  'profile-prompt --brand fills the brief',
+  intakeFilled.stdout.includes('Acme Bakehouse, a test brand.') && !intakeFilled.stdout.includes('[ replace this line')
+);
+ok('profile-prompt -p fills the profile id', !intakeFilled.stdout.includes('<PROFILE_ID>') && intakeFilled.stdout.includes('"acme"'));
+
+const intakeJson = json(['profile-prompt', '--brand', 'X', '-p', 'acme', '--json']);
+ok('profile-prompt --json returns the prompt', intakeJson.prompt.includes('Acme') || intakeJson.prompt.includes('X'));
+ok('profile-prompt --json reports the brand it used', intakeJson.brand === 'X' && intakeJson.profile === 'acme');
 
 // ---------------------------------------------------------------- packaging
 // `install-prompt` reads install/prompt.txt from the engine tree at runtime. If
@@ -298,6 +328,231 @@ ok('check ends with a next step', /^next: /m.test(checkText));
 
 const diffText = run(['diff', '--dir', data]).stdout;
 ok('diff ends with a next step', /^next: /m.test(diffText));
+
+// ---------------------------------------------------------------- apply
+// `apply` takes a MODEL-GENERATED bundle and writes it to disk, so every path
+// and every provenance field in it is untrusted input. The guards matter more
+// than the happy path: a bundle is the easiest place in the whole system to
+// smuggle in a path traversal or somebody else's post, and both would look
+// completely normal in the output.
+const writeBundle = (name, obj) => {
+  const p = path.join(tmp, `${name}.json`);
+  fs.writeFileSync(p, typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2));
+  return p;
+};
+const brandPath = path.join(data, 'profiles', 'acme', 'brand.json');
+const readBrand = () => JSON.parse(fs.readFileSync(brandPath, 'utf8'));
+const exDir = path.join(data, 'profiles', 'acme', 'exemplars', 'instagram');
+
+// The happy path: a new exemplar lands on disk.
+const applied = run([
+  'apply',
+  '--dir',
+  data,
+  '--file',
+  writeBundle('b-new', {
+    profile: 'acme',
+    files: {
+      'exemplars/instagram/2026-01-01-first.md':
+        '---\nprovenance: human-written\nchannel: instagram\n---\n\nPulled the first tray at six.\n',
+    },
+  }),
+]);
+ok(
+  'apply writes a new exemplar',
+  applied.code === 0 && fs.existsSync(path.join(exDir, '2026-01-01-first.md')),
+  applied.stderr.trim()
+);
+
+// A traversal key must write nothing anywhere, and must not exit 0.
+const traversal = run([
+  'apply',
+  '--dir',
+  data,
+  '--file',
+  writeBundle('b-escape', { profile: 'acme', files: { '../../../../PWNED.json': { pwned: true } } }),
+]);
+ok('apply refuses a traversal path', traversal.code === 2, `exit ${traversal.code}`);
+ok('apply names the escape', /escapes the profile/.test(traversal.stderr), traversal.stderr.trim());
+ok('apply writes nothing for a traversal path', !fs.existsSync(path.join(tmp, 'PWNED.json')));
+
+const absTarget = path.join(tmp, 'ABS-PWNED.json');
+const absolute = run([
+  'apply',
+  '--dir',
+  data,
+  '--file',
+  writeBundle('b-abs', { profile: 'acme', files: { [absTarget]: { pwned: true } } }),
+]);
+ok('apply refuses an absolute path', absolute.code === 2, `exit ${absolute.code}`);
+ok('apply writes nothing for an absolute path', !fs.existsSync(absTarget));
+
+// Provenance: third-party is refused with exit 1 (the run succeeded, the answer
+// is no); an unattributed exemplar is a usage error (exit 2).
+const stolen = run([
+  'apply',
+  '--dir',
+  data,
+  '--file',
+  writeBundle('b-stolen', {
+    profile: 'acme',
+    files: {
+      'exemplars/instagram/2026-01-02-stolen.md':
+        '---\nprovenance: third-party\n---\n\nWe are thrilled to announce our new menu!\n',
+    },
+  }),
+]);
+ok('apply refuses a third-party exemplar', stolen.code === 1, `exit ${stolen.code}`);
+ok('apply lists the refused file', /^refused: exemplars\/instagram\/2026-01-02-stolen\.md$/m.test(stolen.stdout), stolen.stdout.trim());
+ok('apply does not write a third-party exemplar', !fs.existsSync(path.join(exDir, '2026-01-02-stolen.md')));
+
+const ghost = run([
+  'apply',
+  '--dir',
+  data,
+  '--file',
+  writeBundle('b-ghost', {
+    profile: 'acme',
+    files: { 'exemplars/instagram/2026-01-03-ghost.md': '---\nchannel: instagram\n---\n\nJust baked.\n' },
+  }),
+]);
+ok('apply refuses an exemplar with no provenance', ghost.code === 2, `exit ${ghost.code}`);
+ok('apply does not write an unattributed exemplar', !fs.existsSync(path.join(exDir, '2026-01-03-ghost.md')));
+
+// JSON is FILLED, not replaced. `init` scaffolds `extends: "_base"`, and a
+// bundle that only answers the identity questions must not drop it — losing it
+// detaches the profile from the base lexicon with no visible error.
+const fill = writeBundle('b-fill', {
+  profile: 'acme',
+  files: { 'brand.json': { identity: { name: 'Acme Bakehouse', founded: '2019' } } },
+});
+const skipRun = run(['apply', '--dir', data, '--file', fill]);
+ok('apply skips a file that already exists', skipRun.code === 0 && /^skipped: brand\.json$/m.test(skipRun.stdout), skipRun.stdout.trim());
+ok('apply leaves a skipped file untouched', readBrand().identity.name !== 'Acme Bakehouse');
+
+const before = readBrand();
+const forced = run(['apply', '--dir', data, '--file', fill, '--force']);
+const after = readBrand();
+ok('apply --force fills the file', forced.code === 0 && after.identity.name === 'Acme Bakehouse', forced.stderr.trim());
+ok('apply --force keeps keys the bundle omits', after.extends === '_base' && after.extends === before.extends, JSON.stringify(after.extends));
+ok('apply --force keeps the version', after.version === before.version, JSON.stringify(after.version));
+ok('apply --force reports a merge, not a write', /^merged: 1$/m.test(forced.stdout), forced.stdout.trim());
+
+// Arrays REPLACE. This is the assertion that fails if `apply` is ever
+// "simplified" into deepMerge, whose arrays concatenate for `extends` — the
+// second run would turn ["warmth"] into ["warmth", "warmth"].
+const arrays = writeBundle('b-arrays', { profile: 'acme', files: { 'brand.json': { values: ['warmth', 'craft'] } } });
+run(['apply', '--dir', data, '--file', arrays, '--force']);
+run(['apply', '--dir', data, '--file', arrays, '--force']);
+ok('apply --force does not duplicate arrays', JSON.stringify(readBrand().values) === '["warmth","craft"]', JSON.stringify(readBrand().values));
+
+// Questions the model could not answer must reach the human.
+const needs = run([
+  'apply',
+  '--dir',
+  data,
+  '--file',
+  writeBundle('b-needs', { profile: 'acme', _needsInput: ['identity.home'], _inferred: ['values'], files: {} }),
+]);
+ok('apply surfaces questions it could not answer', /^needsInput: identity\.home$/m.test(needs.stdout), needs.stdout.trim());
+ok('apply surfaces what the model guessed', /^inferred: values$/m.test(needs.stdout), needs.stdout.trim());
+ok('apply points at --force when the profile is incomplete', /--force/.test(needs.stdout), needs.stdout.trim());
+
+// Structural failures are all exit 2 — the caller passed the wrong thing.
+const structural = [
+  ['a non-object bundle', writeBundle('b-arr-root', [1, 2, 3])],
+  ['a bundle with no profile', writeBundle('b-noprofile', { files: { 'voice.json': {} } })],
+  ['a bundle with no files', writeBundle('b-nofiles', { profile: 'acme' })],
+  ['a profile name that is a path', writeBundle('b-badname', { profile: '../../etc', files: {} })],
+  ['an unknown profile', writeBundle('b-unknown', { profile: 'nope', files: {} })],
+  ['a bundle that is not JSON', writeBundle('b-garbage', '{ not json ')],
+  ['a missing bundle file', path.join(tmp, 'does-not-exist.json')],
+];
+for (const [label, file] of structural) {
+  const r = run(['apply', '--dir', data, '--file', file]);
+  ok(`apply rejects ${label}`, r.code === 2, `exit ${r.code}`);
+}
+ok('apply names the fix for an unknown profile', /voicepack init/.test(run(['apply', '--dir', data, '--file', writeBundle('b-unknown2', { profile: 'nope', files: {} })]).stderr));
+
+// ---------------------------------------------------------------- detect contract
+// A rule whose `detect` block cannot run is worse than a rule with no detect at
+// all: the draft scores 100 while breaking a hard rule, so it ships. That is the
+// exact failure the install prompt warns about, so both the prompt and the code
+// are checked against the one list of types the linter can actually evaluate.
+const detectSection = profilePromptRaw.slice(
+  profilePromptRaw.indexOf('Supported types, with their fields:'),
+  profilePromptRaw.indexOf('Do not invent other detect types')
+);
+const promptTypes = [...detectSection.matchAll(/"type":\s*"([A-Za-z]+)"/g)].map((m) => m[1]).sort();
+ok(
+  'the install prompt lists exactly the detect types the code supports',
+  JSON.stringify(promptTypes) === JSON.stringify([...DETECT_TYPES].sort()),
+  `prompt has [${promptTypes.join(', ')}]`
+);
+ok(
+  'the install prompt documents "words" for forbiddenWords',
+  /"type":\s*"forbiddenWords",\s*"words"/.test(detectSection)
+);
+ok(
+  'the install prompt does not send models to "value" for forbiddenWords',
+  !/"forbiddenWords"[^}]*"value"/.test(detectSection)
+);
+
+// The runtime half: both spellings fire, and an unsupported type is reported
+// rather than ignored.
+const fwData = path.join(tmp, 'detect-data');
+run(['init', '--dir', fwData, '--profile', 'fw']);
+const fwDraft = path.join(tmp, 'draft-fw.md');
+fs.writeFileSync(fwDraft, 'A handcrafted loaf, made slowly.\n');
+
+const fwRule = (name, detect) =>
+  writeBundle(name, {
+    profile: 'fw',
+    files: {
+      'channels/instagram.json': {
+        channel: 'instagram',
+        rules: [
+          {
+            id: 'vp-instagram-001',
+            text: 'Never use handcrafted.',
+            strength: 'hard',
+            why: 'It is generic.',
+            example: 'Made by hand.',
+            detect,
+            source: { type: 'user-teach', date: '2026-09-20' },
+            confidence: 0.9,
+          },
+        ],
+      },
+    },
+  });
+
+const fwCheck = (name, detect) => {
+  const applied = run(['apply', '--dir', fwData, '--file', fwRule(name, detect), '--force']);
+  return { applied, checked: run(['check', '--dir', fwData, '-p', 'fw', '-c', 'instagram', '-f', fwDraft]) };
+};
+
+const asValue = fwCheck('b-fw-value', { type: 'forbiddenWords', value: ['handcrafted'] }).checked;
+ok(
+  'forbiddenWords fires when written with "value"',
+  asValue.code === 1 && /vp-instagram-001/.test(asValue.stdout),
+  asValue.stdout.trim()
+);
+const asWords = fwCheck('b-fw-words', { type: 'forbiddenWords', words: ['handcrafted'] }).checked;
+ok(
+  'forbiddenWords fires when written with "words"',
+  asWords.code === 1 && /vp-instagram-001/.test(asWords.stdout),
+  asWords.stdout.trim()
+);
+ok(
+  'a violation with an empty message still says something',
+  /^violation: HARD vp-instagram-001 \| \S/m.test(asWords.stdout),
+  asWords.stdout.trim()
+);
+ok(
+  'an unsupported detect type is reported, not ignored',
+  /unknown detect type "maxWords"/.test(fwCheck('b-fw-unknown', { type: 'maxWords', value: 20 }).applied.stdout)
+);
 
 fs.rmSync(tmp, { recursive: true, force: true });
 

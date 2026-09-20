@@ -22,6 +22,7 @@ import { checkDraft } from '../lib/check.mjs';
 import { doctor } from '../lib/doctor.mjs';
 import { lintProfile, privacyScan, engineRoot } from '../lib/lint.mjs';
 import { init, teach, pending, merge, listAll, history, rollback, isRepo } from '../lib/commands.mjs';
+import { applyBundle } from '../lib/apply.mjs';
 import { captureUrl, parseRaw, synthesize, ingestSourceFile, listRecipes } from '../lib/ingest.mjs';
 import { readTextIfExists } from '../lib/util.mjs';
 
@@ -33,6 +34,7 @@ const DEFAULT_REPO = 'https://github.com/Kunci-Tech/voicepack';
 const COMMANDS = [
   { name: 'context', group: 'orient', summary: 'one-call orientation: data dir, profiles, channels, pending, capture status' },
   { name: 'install-prompt', group: 'orient', summary: 'print the copy-paste bootstrap prompt for a new agent or machine', options: ['--repo', '--json'] },
+  { name: 'profile-prompt', group: 'orient', summary: 'print the brand-intake prompt to paste into a general-purpose model', options: ['--brand', '-p', '--json'] },
   { name: 'doctor', group: 'orient', summary: 'preflight: node version, data directory, browser bridge', options: ['--json'] },
   { name: 'recipes', group: 'orient', summary: 'list the capture recipes', options: ['--json', '--verbose'] },
   { name: 'list', group: 'orient', summary: 'profiles with channel, rule and exemplar counts', options: ['--json'] },
@@ -47,6 +49,7 @@ const COMMANDS = [
   { name: 'merge', group: 'learn', summary: 'apply a candidate as a rule or an exemplar', options: ['--dir', '-p', '--id', '--as', '--json'] },
 
   { name: 'init', group: 'maintain', summary: 'scaffold a data directory', options: ['--dir', '-p', '--force', '--json'] },
+  { name: 'apply', group: 'maintain', summary: 'write a profile bundle (model-generated JSON) into a profile', options: ['--dir', '-p', '--file', '--force', '--json'] },
   { name: 'lint', group: 'maintain', summary: 'integrity, staleness, contradiction and privacy checks', options: ['--dir', '-p', '--privacy', '--json'] },
   { name: 'history', group: 'maintain', summary: 'git log of the data directory', options: ['--dir', '--json'] },
   { name: 'rollback', group: 'maintain', summary: 'revert profiles/ to an earlier commit', options: ['--dir', '--to', '-p'] },
@@ -78,6 +81,7 @@ const OPTIONS = {
   note: { type: 'string' },
   to: { type: 'string' },
   repo: { type: 'string' },
+  brand: { type: 'string' },
   'max-tokens': { type: 'string' },
   json: { type: 'boolean', default: false },
   verbose: { type: 'boolean', default: false },
@@ -150,6 +154,7 @@ USAGE
 ORIENT
   context         one-call orientation. start here.
   install-prompt  copy-paste prompt that makes an agent do the install
+  profile-prompt  copy-paste prompt that interviews you and returns a bundle
   doctor          preflight: node, data dir, browser bridge
   recipes         list capture recipes
   list            profiles with counts
@@ -167,6 +172,7 @@ LEARN
 
 MAINTAIN
   init     scaffold a data directory
+  apply    write a profile bundle (model-generated JSON) into a profile
   lint     integrity, staleness, contradiction, privacy
   history  git log of the data directory
   rollback revert profiles/ to an earlier commit
@@ -176,6 +182,10 @@ COMMON OPTIONS
   -p, --profile  profile name          -c, --channel  channel name
   -i, --intent   intent for the pack   --json         full structure
   --repo <url>   engine repo, for install-prompt
+  --brand <text> who the brand is, for profile-prompt
+  --file <path>  bundle to apply, for apply
+  --force        for apply: fill files that already exist instead of skipping them
+                 (JSON is merged — existing keys survive, arrays are replaced)
   --quiet        fewer records         --verbose      diagnostics on stderr
 
 EXIT CODES
@@ -289,6 +299,41 @@ async function main() {
       writeErr(`repo: ${repo}`);
       if (!values.repo) writeErr(`note: pass --repo <url> to point the prompt at your own fork`);
       writeErr('next: paste this into the agent that should perform the install');
+      return;
+    }
+
+    // ---------------------------------------------------- profile-prompt
+    // The intake prompt is what you paste into a general-purpose model to turn
+    // an interview into a bundle that `apply` can write. Like install-prompt it
+    // lives as a file so the shipped and documented copies cannot drift, and it
+    // stays GENERIC — no brand names in the engine tree, ever. The brand brief
+    // is injected at run time, so the same prompt works for every profile.
+    case 'profile-prompt': {
+      const promptPath = path.join(engineRoot, 'install', 'profile-prompt.txt');
+      const raw = readTextIfExists(promptPath);
+      if (raw === null) {
+        fail(`profile prompt is missing from the engine tree: ${promptPath}`, {
+          next: 'your checkout is incomplete — re-clone the engine',
+        });
+      }
+
+      const brand = values.brand ?? null;
+      const brief = brand ?? '[ replace this line with who we are: our name, what we do, where we are, and which languages we post in ]';
+      const prompt = raw.replaceAll('<BRAND_BRIEF>', brief);
+      const profileId = values.profile ?? null;
+      const out = profileId ? prompt.replaceAll('<PROFILE_ID>', profileId) : prompt;
+
+      if (values.json) {
+        return write(
+          JSON.stringify({ version: VERSION, engine: engineRoot, brand, profile: profileId, prompt: out }, null, 2)
+        );
+      }
+
+      process.stdout.write(out.endsWith('\n') ? out : out + '\n');
+      writeErr(`profile-prompt: ${out.split('\n').length} lines · engine ${engineRoot}`);
+      if (!brand) writeErr('note: pass --brand "<one or two lines about the brand>" to fill the brief');
+      if (!profileId) writeErr('note: pass -p <profile-id> to fill the folder name the bundle will be written to');
+      writeErr('next: paste this into the model that will interview you, then save its JSON and run `voicepack apply --file <bundle.json>`');
       return;
     }
 
@@ -601,6 +646,84 @@ async function main() {
       r.kv('scaffolded', res.dataDir).kv('profile', profile).kv('filesCreated', res.created.length);
       r.raw('data directory is separate from the engine on purpose — see README, "The two trees"');
       r.next(`export VOICEPACK_DIR="${res.dataDir}" then \`voicepack context\``);
+      return emit(r);
+    }
+
+    // ------------------------------------------------------------ apply
+    // A bundle is what a model hands back when you ask it to capture a brand's
+    // voice: one JSON object, file paths as keys. This turns it into a profile.
+    // The bundle is untrusted input, so the path and provenance guards live in
+    // lib/apply.mjs rather than being trusted here.
+    case 'apply': {
+      const file = need('file', values, 'pass --file <bundle.json>');
+      const raw = readTextIfExists(path.resolve(file));
+      if (raw === null) usageError(`file not found: ${file}`, 'pass an existing path with --file <bundle.json>');
+
+      let bundle;
+      try {
+        bundle = JSON.parse(raw);
+      } catch (e) {
+        // Exit 2, like every other malformed-bundle case. The caller handed us
+        // something that is not a bundle; that is a usage error, and the agent
+        // fixes it by changing what it passed, not by asking a human.
+        usageError(
+          `bundle is not valid JSON: ${e.message}`,
+          'the bundle must be pure JSON — strip any markdown fences or commentary around it'
+        );
+      }
+
+      const res = applyBundle(dataDir, bundle, {
+        force: Boolean(values.force),
+        profile: values.profile ?? null,
+      });
+
+      if (values.json) return write(JSON.stringify(res, null, 2));
+
+      const r = report();
+      r.kv('profile', res.profile).kv('dir', res.dir);
+      r.kv('written', res.written.length);
+      for (const f of res.written) r.raw(`file: ${f}`);
+      if (res.merged.length) {
+        r.kv('merged', res.merged.length);
+        for (const f of res.merged) r.raw(`file: ${f}`);
+        r.kv('mergedNote', 'existing keys kept; the bundle filled the rest');
+      }
+      if (res.skipped.length) {
+        r.rows('skipped', res.skipped);
+        r.kv('skippedNote', 'already existed — pass --force to fill them from the bundle');
+      }
+      if (res.refused.length) {
+        r.rows('refused', res.refused);
+        r.kv('refusedReason', 'third-party content cannot become an exemplar');
+      }
+      if (res.needsInput.length) r.rows('needsInput', res.needsInput);
+      if (res.inferred.length) r.rows('inferred', res.inferred);
+
+      // Check what we just wrote. An import that leaves the profile invalid is
+      // not a success, and the bundle is the cheapest place to fix it.
+      const writtenProfile = loadProfile(dataDir, res.profile);
+      const issues = lintProfile(writtenProfile);
+      const errors = issues.filter((i) => i.level === 'error');
+      r.kv('lint.errors', errors.length);
+      for (const i of issues) r.raw(`${i.level}: ${i.message}`);
+
+      if (res.refused.length) {
+        r.next('drop the third-party posts from the bundle — only your own writing may become an exemplar');
+        emit(r);
+        process.exitCode = EXIT.FAILED;
+        return;
+      }
+      if (errors.length) {
+        r.next('fix the errors above in the bundle, then re-run `voicepack apply`');
+        emit(r);
+        process.exitCode = EXIT.FAILED;
+        return;
+      }
+      r.next(
+        res.needsInput.length
+          ? 'the profile is valid but incomplete — fill the needsInput fields, then re-run `voicepack apply --force`'
+          : `voicepack pack -p ${res.profile} -c <channel> -i <intent>`
+      );
       return emit(r);
     }
 

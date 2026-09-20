@@ -168,6 +168,8 @@ Nothing is learned without approval. `ingest` and `teach` write; only `merge` an
 ```
 voicepack context                                  orient: dirs, profiles, pending, capture
 voicepack install-prompt [--repo <url>]            the bootstrap prompt, for a new machine
+voicepack profile-prompt [--brand "<brief>"] [-p P] the intake prompt, for a new brand
+voicepack apply   --file <bundle.json> [-p P] [--force]
 voicepack doctor                                   preflight: node, data dir, bridge
 voicepack pack    -p P -c C [-i I] [--max-tokens N] [--verbose]
 voicepack check   -p P -c C -f draft.md [--json] [--quiet]
@@ -202,6 +204,51 @@ wires it up, installs this skill file, and runs preflight — all without the us
 touching a shell. It is also the thing to paste when the user asks how to set
 Voicepack up somewhere else.
 
+## Capturing a brand from scratch
+
+When the profile is an empty scaffold and the user wants it filled, do not interview
+them field by field and do not write the JSON yourself from what you happen to know.
+A brand's voice is not something you can infer from its category, and a plausible
+guess is worse than a blank — it is stored as fact and silently shapes every draft
+from then on.
+
+```
+voicepack init          --dir <data> --profile <id>     # scaffold, if not done
+voicepack profile-prompt --brand "<who they are>" -p <id>
+```
+
+Print the prompt and hand it to the user to paste into a capable model. It runs in two
+passes by design: questions and a plain-language description first, JSON only after
+the user confirms the description. That description step is where a wrong reading of
+the brand gets caught, so do not skip it or "helpfully" generate the bundle yourself.
+
+When the user brings the JSON back:
+
+```
+voicepack apply --file bundle.json --force
+```
+
+Read the result rather than assuming it worked:
+
+- `written` / `merged` — files landed. `merged` means an existing scaffold file was
+  filled; keys the bundle did not mention were kept, including `extends: "_base"`.
+- `skipped` — already existed and `--force` was not passed. Nothing was overwritten.
+- `refused` — an exemplar claimed `provenance: third-party`. Exit code is 1. Do not
+  retry it; the bundle must drop that post. Someone else's writing may teach a *rule*
+  about structure, but it may never be a model of this brand's voice.
+- `needsInput` — questions the model could not answer. Put these to the user.
+- `inferred` — fields the model guessed. Have the user review them specifically.
+- `lint.errors` — the import left the profile invalid. Fix the bundle, not the profile.
+
+Exit code 2 means the bundle itself is malformed (bad path, unknown profile, no
+`files` key) — fix the bundle. Exit code 1 means the bundle was readable but
+something in it was rejected — usually provenance.
+
+Two things the prompt is strict about, and you should be too: it never invents a
+field, and it never fabricates an exemplar. If the user's bundle contains an exemplar
+that looks too polished to be a real post, ask. An invented exemplar teaches a voice
+the brand does not have, and it is the hardest error to find later.
+
 ## Troubleshooting
 
 - **"Profile not found"** — the data directory is wrong. Run `voicepack list` or
@@ -222,6 +269,22 @@ Voicepack up somewhere else.
 - **`install-prompt` warns the placeholder is unfilled** — pass
   `--repo <engine-repo-url>`. The prompt still prints; it just cannot tell the
   installing agent where to fetch the engine.
+- **`profile-prompt` prints a bracketed reminder instead of a brief** — pass
+  `--brand "<one or two lines about the brand>"`. The prompt still prints; it just
+  does not know who it is interviewing for.
+- **`apply` exits `2`** — the bundle is malformed, not rejected. Read the `error:`
+  line: an unknown profile means `init` first, a bad path means the model invented a
+  filename, "not valid JSON" means markdown fences survived the copy.
+- **`apply` exits `1`** — the bundle was readable but something in it was refused,
+  almost always a `provenance: third-party` exemplar. Remove that post from the
+  bundle. Do not retry it as-is, and do not "fix" it by relabelling the provenance.
+- **`apply` reports `merged` where you expected `written`** — the file already
+  existed and `--force` was passed, so the bundle filled it instead of replacing it.
+  Keys the bundle omitted survived on purpose: this is what keeps `extends: "_base"`.
+- **A rule never fires even though the draft clearly breaks it** — run
+  `voicepack lint -p P` and look for "will never run". A `detect` block with an
+  unsupported `type`, or `forbiddenWords` with no words, is ignored at check time,
+  so the draft scores 100 while violating the rule. Fix the rule, not the draft.
 
 ## Maintaining this skill
 
@@ -229,12 +292,16 @@ If you change the procedure here, keep the CLI surface in sync and re-run
 `voicepack lint --privacy` before committing. Brand data must never enter the
 engine repository.
 
-Two invariants are enforced by the test suite rather than by discipline, because
-both are the kind that fail silently:
+Three invariants are enforced by the test suite rather than by discipline, because
+each is the kind that fails silently:
 
 - `INSTALL.md` must contain `install/prompt.txt` **verbatim**, between the
   `BEGIN/END INSTALL PROMPT` markers. Edit one without the other and the suite fails.
 - `package.json` must ship `install/`, must list no dependencies, and its scripts
-  must point at fixtures that exist. `install-prompt` reads that file at runtime,
-  so omitting it from `files` breaks the published package while working perfectly
-  from a clone.
+  must point at fixtures that exist. `install-prompt` and `profile-prompt` read that
+  directory at runtime, so omitting it from `files` breaks the published package
+  while working perfectly from a clone.
+- `install/profile-prompt.txt` must keep its `<BRAND_BRIEF>` and `<PROFILE_ID>`
+  placeholders, and the detect types it lists must match `DETECT_TYPES` in
+  `lib/check.mjs` exactly. The first stops brand data reaching this public repo; the
+  second stops the prompt promising models a rule type the linter cannot evaluate.
