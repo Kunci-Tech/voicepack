@@ -118,6 +118,39 @@ next: fill the profile first — `voicepack profile-prompt --brand "..." -p kunc
 write loop does not break. It is the *instruction* that changes, because that is
 what the agent was about to act on.
 
+### What gets dropped when the budget is tight
+
+The pack is not first-come-first-served. Blocks are laid out in **priority order**,
+and the budget walks that list once:
+
+| Order | Block | Why here |
+|---|---|---|
+| 1 | header | title, voice dials, rhythm |
+| 2 | hard-rules | never violate |
+| 3 | lexicon | the banned-word list — `lint` calls it the highest-leverage artefact in the store, and it is compact |
+| 4 | structure | beats and platform limits |
+| 5 | moves | **truncated to fit**, not dropped |
+| 6 | soft-rules | preferences; a move with a real example teaches more per token |
+| 7 | exemplars | ranked by intent and engagement, added last |
+
+Two details matter. The lexicon sits above moves because moves are by far the
+longest block — ten of them with examples is most of a 700-token budget — and
+first-come-first-served meant the banned-word list was the thing that got starved
+out. And moves are the one list-shaped block, so they are **cut to fit** rather than
+dropped whole: six moves and the banned words beats ten moves and no banned words,
+and both beat no moves at all. A truncated list says so:
+
+```
+MOVES (do this)
+- Start from a real observation about customers, the kitchen, or daily operations...
+   e.g. Belakangan kami sering lihat satu pola.
+...
+(+6 more moves not shown — raise --max-tokens)
+```
+
+`--max-tokens 1200` is the hard cap; the default is 700. Raise it when a channel
+needs the full move list, and check `dropped:` on stderr to see what did not fit.
+
 ---
 
 ## The idea: the CLI is a context firewall

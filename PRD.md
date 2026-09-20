@@ -10,7 +10,7 @@
 | **First target** | WorkBuddy AI skill (adapters for other agents later) |
 | **Repository model** | Public engine repo + private profile data, out of tree |
 | **First brand profile** | Kunci Kuppi (data, not the product) |
-| **Status** | Phase 0 implemented; 148/148 smoke assertions passing |
+| **Status** | Phase 0 implemented; 157/157 smoke assertions passing |
 | **Version** | 0.6 |
 | **Date** | 20 September 2026 |
 
@@ -25,8 +25,8 @@
 > test suite checks the prompt against, after defect 6 below showed that a rule
 > whose predicate cannot run scores a violating draft at 100/ship. `context` and
 > `pack` now report an empty profile instead of handing over a clean-looking
-> skeleton (defect 10). Principle 18 added. Five defects found by testing (6–10)
-> recorded; assertions 89 → 148.
+> skeleton (defect 10). Principle 18 added. Eight defects found by testing (6–13)
+> recorded; assertions 89 → 157.
 
 > **Changelog — v0.5.** Added §3.6 (the interface is agent-first) and principles
 > 15–17. Installation became a paste-able prompt rather than a procedure
@@ -248,8 +248,8 @@ Four design details were settled during the build and are worth recording:
   empty profile being reported as empty rather than packed silently. Each fails
   silently in production otherwise.
 
-**Ten defects found by testing, not by review.** Worth recording, because each was
-invisible on inspection and would have shipped:
+**Thirteen defects found by testing, not by review.** Worth recording, because each
+was invisible on inspection and would have shipped:
 
 1. **A dangling exemplar heading.** At `--max-tokens 300` the compiler emitted
    "HERE IS THE VOICE" with nothing beneath it — worse than omitting the heading,
@@ -300,6 +300,37 @@ empty profile produces output that is structurally identical to a working one.
 None of the three was found by reading code. 6 and 9 were found by writing a draft
 that deliberately breaks a rule and asserting the score drops; 10 was found by
 executing the install prompt as an agent would.
+
+Defects 11–13 were found the same way, by compiling the **first real brand profile**
+and reading the result. All three produced a well-formed pack that fit its budget
+and passed every existing test.
+
+11. **The banned-word list was dropped from the pack.** Lexicon sat below moves in
+    the budget walk, and ten moves with examples is most of a 700-token budget — so
+    the block `lint` itself calls "the highest-leverage artefact in the store" was
+    the one that got dropped. Moves are now truncated to fit rather than taken
+    first-come-first-served, and lexicon moved above them. A partial move list plus
+    the banned words beats a full move list without them; the old code chose the
+    latter without ever comparing the two.
+12. **A sentence-shaped `openingMove` was spliced into `open with …`.** Models write
+    that field as a full instructive sentence about as often as a short phrase, and
+    the template assumed the phrase. The output read
+    `Rhythm: max 3 lines per paragraph. open with Start from something real: an
+    observation, … Avoid opening with a generic promotional claim.. close with End
+    simply. … already lands..` — doubled full stops, a forty-word "rhythm" line, and
+    the instruction buried inside a list it does not belong to. They now get their
+    own `OPEN:` / `CLOSE:` lines, which reads correctly whichever shape arrives.
+13. **The banned-word list printed its duplicates.** `_base` ships a generic aiSlop
+    list and the profile adds `brandSpecific`; a brand that bans "elevate" is
+    banning something the base already has, and `deepMerge` concatenates arrays. Six
+    words appeared twice, spending budget restating a rule — in the one section
+    where every token is supposed to be load-bearing.
+
+The pattern across all thirteen: **none was found by reading code, and the last
+four were found only after a real profile existed.** A fixture written to exercise
+the compiler will exercise the paths its author already thought about. The
+defects live in the paths nobody thought about, and a real user's data is the only
+thing that visits them.
 
 
 **The data — private, never forked, never PR'd.**

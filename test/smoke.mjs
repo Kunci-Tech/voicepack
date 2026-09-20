@@ -594,6 +594,66 @@ ok(
 );
 ok('a populated profile still packs exemplars', json(['pack', '--dir', DEMO, '-p', 'demo', '-c', 'instagram', '--json']).included.includes('exemplars'));
 
+// ---------------------------------------------------------------- pack layout
+// Three ways a pack can be well-formed and still wrong. All three were found by
+// compiling the first real brand profile, not by reading the compiler — the
+// output looked fine until someone read it.
+const packData = path.join(tmp, 'pack-data');
+run(['init', '--dir', packData, '--profile', 'pk']);
+
+// Fourteen moves with examples is deliberately more than a 700-token budget holds.
+const manyMoves = Array.from({ length: 14 }, (_, i) => ({
+  id: `mv-${String(i + 1).padStart(3, '0')}`,
+  text: `Move ${i + 1} describes a specific thing this brand does when it writes, in enough words to cost real tokens.`,
+  example: `Contoh kalimat untuk move ${i + 1} yang juga cukup panjang.`,
+}));
+run([
+  'apply', '--dir', packData, '-p', 'pk', '--force', '--file',
+  writeBundle('b-pack', {
+    profile: 'pk',
+    files: {
+      'voice.json': {
+        moves: manyMoves,
+        mechanics: {
+          maxLinesPerParagraph: 3,
+          // A full instructive sentence, which is how a model writes this field
+          // about half the time. The other half is a short phrase.
+          openingMove: 'Start from something real: an observation, incident, or craving. Avoid opening with a generic promotional claim.',
+          closingMove: 'End simply. A short statement is often enough. Do not force a question.',
+        },
+      },
+      'lexicon.json': {
+        // "elevate" and "unleash" appear in BOTH lists, which is the normal case:
+        // _base ships a generic aiSlop list and the profile adds brandSpecific.
+        banned: { aiSlop: ['elevate', 'unleash', 'game-changer'], brandSpecific: ['elevate', 'unleash', 'aku', 'gigitan'] },
+      },
+    },
+  }),
+]);
+
+const pk = run(['pack', '--dir', packData, '-p', 'pk', '-c', 'instagram']);
+
+// A sentence spliced into `open with ${x}` reads "open with Start from
+// something real: ... claim.." — doubled full stops and the instruction buried.
+ok('a sentence-shaped openingMove is not spliced into "open with"', !/open with Start from/.test(pk.stdout), pk.stdout.slice(0, 200));
+ok('a sentence-shaped openingMove gets its own OPEN line', /^OPEN: Start from something real/m.test(pk.stdout));
+ok('a sentence-shaped closingMove gets its own CLOSE line', /^CLOSE: End simply/m.test(pk.stdout));
+ok('the rhythm line has no doubled full stop', !/\.\./.test(pk.stdout.split('\n').find((l) => l.startsWith('Rhythm:')) ?? ''));
+
+// The lexicon is the artefact `lint` calls the highest-leverage in the store. It
+// used to sit below moves in the budget walk and got starved out entirely by a
+// long move list.
+ok('the lexicon survives a move list that overflows the budget', pk.stdout.includes('NEVER USE:'));
+ok('moves are truncated to fit rather than dropped whole', /^MOVES \(do this\)$/m.test(pk.stdout));
+ok('a truncated move list says how many it left out', /more moves? not shown/.test(pk.stdout), pk.stdout.slice(-200));
+
+// Deduplication: a word banned by both the base list and the profile must appear
+// once. Printing it twice spends budget restating a rule.
+const neverUse = pk.stdout.split('\n').find((l) => l.startsWith('NEVER USE:')) ?? '';
+const countOf = (w) => (neverUse.match(new RegExp(`\\b${w}\\b`, 'g')) ?? []).length;
+ok('a word banned by both lists appears once', countOf('elevate') === 1, `elevate ×${countOf('elevate')}`);
+ok('deduplication keeps the brand-specific word', countOf('aku') === 1 && countOf('gigitan') === 1);
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log(`\n  ${pass} passed \u00b7 ${fail} failed\n`);
