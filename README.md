@@ -412,6 +412,15 @@ structural trick. A rule generalizes; a copied post doesn't.
 **Nothing is learned without approval.** `ingest` and `teach` propose. `merge` applies.
 One instance is evidence, not a rule — promotion needs three independent instances.
 
+Rejecting is the other half of reviewing:
+
+```bash
+npx voicepack discard --id L-0007 --reason "a reply, not a post"
+```
+
+The record stays on disk with `status: discarded`, so it drops out of `diff` and stops
+cluttering `context`, and the learnings log keeps the trail.
+
 ---
 
 ## Capture through the browser bridge
@@ -450,7 +459,8 @@ voicepack teach    -p P -c C --rule "..." [--why "..."] [--strength hard|soft]
 voicepack capture  -p P -c C --url <url>
 voicepack ingest   -p P -c C [--url <url> | --capture <raw.json> | --source <file>] [--own]
 voicepack diff     [--json]
-voicepack merge    -p P --id L-0001 [--as rule|hard|exemplar]
+voicepack merge    -p P --id L-0001 [--as rule|hard|exemplar] [--text "..."]
+voicepack discard  --id L-0001 [--reason "..."]
 voicepack lint     -p P   |   voicepack lint --privacy
 voicepack list
 voicepack history  |  voicepack rollback --to <ref>

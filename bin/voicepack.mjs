@@ -21,7 +21,7 @@ import { buildPack } from '../lib/pack.mjs';
 import { checkDraft } from '../lib/check.mjs';
 import { doctor } from '../lib/doctor.mjs';
 import { lintProfile, privacyScan, engineRoot } from '../lib/lint.mjs';
-import { init, teach, pending, merge, listAll, history, rollback, isRepo } from '../lib/commands.mjs';
+import { init, teach, pending, merge, discard, listAll, history, rollback, isRepo } from '../lib/commands.mjs';
 import { applyBundle } from '../lib/apply.mjs';
 import { captureUrl, parseRaw, synthesize, ingestSourceFile, listRecipes } from '../lib/ingest.mjs';
 import { readTextIfExists } from '../lib/util.mjs';
@@ -46,7 +46,8 @@ const COMMANDS = [
   { name: 'capture', group: 'learn', summary: 'fetch a URL through the browser bridge into captures/', options: ['--dir', '-p', '-c', '--url', '--recipe', '--json'] },
   { name: 'ingest', group: 'learn', summary: 'parse and synthesize a capture or file into a candidate', options: ['--dir', '-p', '-c', '--url', '--capture', '--source', '--own', '--note', '--recipe', '--json'] },
   { name: 'diff', group: 'learn', summary: 'list candidates awaiting approval', options: ['--dir', '--json'] },
-  { name: 'merge', group: 'learn', summary: 'apply a candidate as a rule or an exemplar', options: ['--dir', '-p', '--id', '--as', '--json'] },
+  { name: 'merge', group: 'learn', summary: 'apply a candidate as a rule or an exemplar', options: ['--dir', '-p', '--id', '--as', '--text', '--json'] },
+  { name: 'discard', group: 'learn', summary: 'reject a candidate without applying it', options: ['--dir', '--id', '--reason', '--json'] },
 
   { name: 'init', group: 'maintain', summary: 'scaffold a data directory', options: ['--dir', '-p', '--force', '--json'] },
   { name: 'apply', group: 'maintain', summary: 'write a profile bundle (model-generated JSON) into a profile', options: ['--dir', '-p', '--file', '--force', '--json'] },
@@ -79,6 +80,7 @@ const OPTIONS = {
   capture: { type: 'string' },
   recipe: { type: 'string' },
   note: { type: 'string' },
+  reason: { type: 'string' },
   to: { type: 'string' },
   repo: { type: 'string' },
   brand: { type: 'string' },
@@ -169,6 +171,7 @@ LEARN
   ingest   parse + synthesize a capture into a candidate
   diff     list candidates awaiting approval
   merge    apply a candidate as a rule or an exemplar
+  discard  reject a candidate without applying it
 
 MAINTAIN
   init     scaffold a data directory
@@ -584,7 +587,7 @@ async function main() {
       }
       r.next(
         cands.length
-          ? `review each, then \`voicepack merge --id <id>\`. one instance is evidence, not a rule.`
+          ? 'review each, then `voicepack merge --id <id>` or `voicepack discard --id <id>`. one instance is evidence, not a rule.'
           : 'nothing pending. capture something: `voicepack ingest --url <url> -p <profile> -c <channel>`'
       );
       return emit(r);
@@ -616,6 +619,23 @@ async function main() {
       r.kv('file', path.relative(dataDir, res.result.file));
       if (res.result.skipped) r.kv('skipped', 'already present');
       r.next('bump `version` in brand.json if this is a release, then commit the data directory');
+      return emit(r);
+    }
+
+    // ------------------------------------------------------------ discard
+    case 'discard': {
+      const id = need('id', values, 'run `voicepack diff` to list candidate ids');
+      let cand;
+      try {
+        cand = discard(dataDir, id, { reason: values.reason ?? null });
+      } catch (e) {
+        fail(e.message, { next: 'run `voicepack diff` to see pending candidates' });
+      }
+      if (values.json) return write(JSON.stringify(cand, null, 2));
+      const r = report();
+      r.kv('id', cand.id).kv('status', cand.status);
+      if (cand.discardReason) r.kv('reason', cand.discardReason);
+      r.next('it stays on disk as discarded, and leaves the pending list');
       return emit(r);
     }
 

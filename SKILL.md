@@ -150,6 +150,18 @@ If the bridge is unavailable, `voicepack doctor` says so. Fall back to
 `voicepack ingest --source <file>` with text the user pasted directly. Never block
 the user on the bridge.
 
+**Every candidate gets an answer.** After `diff`, either merge it or reject it — do not
+leave it pending. A candidate that turns out to be a reply, a repost, or someone else's
+quote is rejected, not merged and not forgotten:
+
+```
+voicepack discard --id L-0007 --reason "a reply, not a post"
+```
+
+Rejecting is a normal outcome, not a failure. Merging a candidate you are unsure about
+puts a rule in the profile that no one asked for, and leaving it pending puts it in
+every future `context` call.
+
 ## When the user teaches a rule
 
 ```

@@ -292,6 +292,24 @@ ok('the refusal writes no file at all', !wroteEmpty);
 const diff = json(['diff', '--dir', data, '--json']);
 ok('merged candidates leave the pending list', diff.every((c) => c.status === 'pending'));
 
+// Rejecting is half of reviewing. Without a way to say no, every candidate is
+// either merged into the profile or left pending forever.
+const reject = run(['discard', '--dir', data, '--id', third.id, '--reason', 'a reply, not a post']);
+ok('discard accepts a pending candidate', reject.code === 0, reject.stderr.trim());
+const afterDiscard = json(['diff', '--dir', data, '--json']);
+ok('a discarded candidate leaves the pending list', !afterDiscard.some((c) => c.id === third.id));
+const discardFile = JSON.parse(fs.readFileSync(path.join(data, 'candidates', `${third.id}.json`), 'utf8'));
+ok('a discarded candidate keeps its record', discardFile.status === 'discarded');
+ok('a discarded candidate keeps the reason', discardFile.discardReason === 'a reply, not a post');
+ok('the learnings log records the discard', fs.readFileSync(path.join(data, 'learnings', 'log.jsonl'), 'utf8').includes('"type":"discard"'));
+
+const noSuch = run(['discard', '--dir', data, '--id', 'L-4242']);
+ok('discarding an unknown id fails', noSuch.code === 1 && /No candidate with id/.test(noSuch.stderr), noSuch.stderr.trim());
+
+// A discarded candidate must not come back through a later merge.
+const revive = run(['merge', '--dir', data, '--id', third.id, '--as', 'exemplar']);
+ok('a discarded candidate is no longer pending', revive.code === 1, `exit ${revive.code}`);
+
 const list = json(['list', '--dir', DEMO, '--json']);
 ok('list reports the demo profile', list.length === 1 && list[0].name === 'demo');
 ok('list counts rules and exemplars', list[0].rules === 4 && list[0].exemplars === 3, JSON.stringify(list[0]));
